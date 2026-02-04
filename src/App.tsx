@@ -9,7 +9,7 @@ import ExamBank from './pages/ExamBank';
 import TestDetail from './pages/TestDetail';
 import PartDetail from './pages/PartDetail';
 import LoadingScreen from './components/LoadingScreen';
-
+///test commit
 function App() {
   const [loading, setLoading] = useState(true);
 
