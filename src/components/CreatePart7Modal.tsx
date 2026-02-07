@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Modal, Form, Input, Select, Button, message, Card, Upload, Radio, Collapse } from 'antd';
-import { DeleteOutlined, PlusOutlined, InboxOutlined } from '@ant-design/icons';
+import { useState, useEffect } from 'react';
+import { Modal, Form, Input, Select, message, Card, Upload, Radio, Collapse, Alert } from 'antd';
+import { InboxOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import ReactQuill from 'react-quill-new';
 import 'quill/dist/quill.snow.css';
@@ -22,8 +22,62 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
     const [loading, setLoading] = useState(false);
     const [fileList, setFileList] = useState<UploadFile[]>([]);
     const [passageType, setPassageType] = useState<'image' | 'text' | 'both'>('image');
+    const [existingQuestionNumbers, setExistingQuestionNumbers] = useState<number[]>([]);
+    const [duplicateWarning, setDuplicateWarning] = useState<string>('');
 
-    const handleSubmit = async (values: any, shouldClose: boolean) => {
+    // Fetch existing questions when modal opens
+    useEffect(() => {
+        if (open && partId) {
+            fetchExistingQuestions();
+        }
+    }, [open, partId]);
+
+    const fetchExistingQuestions = async () => {
+        if (!partId) return;
+        try {
+            const response = await api.get(`/parts/${partId}/questions`);
+            if (response.data.success) {
+                const numbers = response.data.questions.map((q: any) => q.questionNumber);
+                setExistingQuestionNumbers(numbers);
+            }
+        } catch (error) {
+            console.error('Error fetching questions:', error);
+        }
+    };
+
+    const checkDuplicateRange = (startNum: number, endNum: number) => {
+        if (!startNum || !endNum) {
+            setDuplicateWarning('');
+            return;
+        }
+
+        const requestedNumbers = [];
+        for (let i = startNum; i <= endNum; i++) {
+            requestedNumbers.push(i);
+        }
+
+        const duplicates = requestedNumbers.filter(num => existingQuestionNumbers.includes(num));
+
+        if (duplicates.length > 0) {
+            // Find next available number
+            let nextAvailable = 147;
+            for (let i = 147; i <= 200; i++) {
+                if (!existingQuestionNumbers.includes(i)) {
+                    nextAvailable = i;
+                    break;
+                }
+            }
+
+            setDuplicateWarning(
+                `Các câu ${duplicates.join(', ')} đã tồn tại! Gợi ý: Bắt đầu từ câu ${nextAvailable}`
+            );
+        } else {
+            setDuplicateWarning('');
+        }
+    };
+
+
+    const handleSubmit = async (values: any) => {
         if (!partId) return;
 
         // Validation: Must have at least image OR text
@@ -48,6 +102,11 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
 
             let passageHtml = '';
 
+            // 0. Add Title (Always if provided)
+            if (passageTitle) {
+                passageHtml += `<p><b>${passageTitle}</b></p>`;
+            }
+
             // 1. Handle Image Upload (if any)
             if (fileList.length > 0) {
                 const uploadedUrls: string[] = [];
@@ -60,13 +119,16 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
                         formData.append('image', fileToUpload);
 
                         const res = await api.post('/upload/image', formData, {
-                            headers: { 'Content-Type': 'multipart/form-data' }
+                            headers: {
+                                'Content-Type': undefined
+                            }
                         });
+
 
                         if (res.data.success) {
                             uploadedUrls.push(res.data.url);
                         } else {
-                            throw new Error('Failed to upload image');
+                            throw new Error(res.data.message || 'Failed to upload image');
                         }
                     }
                 }
@@ -79,9 +141,7 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
 
             // 2. Handle Text Input (if any)
             if (passageText) {
-                // Add title if provided
-                const titleHtml = passageTitle ? `<h3>${passageTitle}</h3>` : '';
-                passageHtml += titleHtml + passageText;
+                passageHtml += passageText;
             }
 
             // 3. Prepare Payload
@@ -105,36 +165,26 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
             if (response.data.success) {
                 message.success('Tạo nhóm câu hỏi thành công');
                 onSuccess();
-
-                if (shouldClose) {
-                    form.resetFields();
-                    setFileList([]);
-                    setPassageType('image');
-                    onCancel();
-                } else {
-                    // Reset for next entry
-                    form.resetFields();
-                    setFileList([]);
-                    message.info('Đã lưu! Mời nhập nhóm câu hỏi tiếp theo.');
-                }
+                form.resetFields();
+                setFileList([]);
+                setPassageType('image');
+                onCancel();
             } else {
                 message.error(response.data.message || 'Tạo thất bại');
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Create Part 7 error:', error);
-            message.error('Có lỗi xảy ra khi upload ảnh hoặc lưu câu hỏi');
+            // Show detailed error
+            const errorMsg = error.response?.data?.message || error.message || 'Có lỗi xảy ra khi upload ảnh hoặc lưu câu hỏi';
+            message.error(`Lỗi: ${errorMsg}`);
         } finally {
             setLoading(false);
         }
     };
 
     const handleOk = () => {
-        form.validateFields().then(values => handleSubmit(values, true));
-    };
-
-    const handleSaveAndAdd = () => {
-        form.validateFields().then(values => handleSubmit(values, false));
+        form.validateFields().then(values => handleSubmit(values));
     };
 
     const uploadProps: UploadProps = {
@@ -145,7 +195,7 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
             setFileList(newFileList);
         },
         beforeUpload: (file) => {
-            setFileList([...fileList, file]);
+            setFileList(prev => [...prev, file]); // Use functional update
             return false;
         },
         fileList,
@@ -178,17 +228,6 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
             confirmLoading={loading}
             style={{ top: 20 }}
             maskClosable={false}
-            footer={[
-                <Button key="cancel" onClick={onCancel}>
-                    Hủy
-                </Button>,
-                <Button key="save_add" onClick={handleSaveAndAdd} loading={loading}>
-                    Lưu & Thêm nhóm tiếp theo
-                </Button>,
-                <Button key="save_close" type="primary" onClick={handleOk} loading={loading}>
-                    Lưu & Đóng
-                </Button>,
-            ]}
         >
             <Form
                 form={form}
@@ -198,6 +237,14 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
                 <div style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 8 }}>
                     {/* Passage Type Selector */}
                     <Card title="Chọn cách nhập đoạn văn" size="small" style={{ marginBottom: 16 }}>
+                        <Form.Item
+                            label="Tiêu đề (VD: Questions 147-148 refer to the following notice)"
+                            name="passageTitle"
+                            style={{ marginBottom: 16 }}
+                        >
+                            <Input placeholder="Nhập tiêu đề..." style={{ fontWeight: 600 }} />
+                        </Form.Item>
+
                         <Radio.Group
                             value={passageType}
                             onChange={(e) => setPassageType(e.target.value)}
@@ -239,13 +286,6 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
                     {(passageType === 'text' || passageType === 'both') && (
                         <Card title="Nhập Nội Dung Đoạn Văn" size="small" style={{ marginBottom: 16 }}>
                             <Form.Item
-                                label="Tiêu đề (VD: Questions 147-148 refer to...)"
-                                name="passageTitle"
-                            >
-                                <Input placeholder="Nhập tiêu đề..." style={{ fontWeight: 600 }} />
-                            </Form.Item>
-
-                            <Form.Item
                                 label="Nội dung đoạn văn"
                                 name="passageText"
                             >
@@ -286,7 +326,18 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
                                 ]}
                                 style={{ marginBottom: 0, width: 100 }}
                             >
-                                <Input type="number" min={147} max={200} placeholder="147" style={{ fontWeight: 600 }} />
+                                <Input
+                                    type="number"
+                                    min={147}
+                                    max={200}
+                                    placeholder="147"
+                                    style={{ fontWeight: 600 }}
+                                    onChange={(e) => {
+                                        const startNum = Number(e.target.value);
+                                        const endNum = form.getFieldValue('endQuestion');
+                                        checkDuplicateRange(startNum, endNum);
+                                    }}
+                                />
                             </Form.Item>
                             <Form.Item
                                 label="Đến câu"
@@ -306,9 +357,31 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
                                 ]}
                                 style={{ marginBottom: 0, width: 100 }}
                             >
-                                <Input type="number" min={147} max={200} placeholder="148" style={{ fontWeight: 600 }} />
+                                <Input
+                                    type="number"
+                                    min={147}
+                                    max={200}
+                                    placeholder="148"
+                                    style={{ fontWeight: 600 }}
+                                    onChange={(e) => {
+                                        const endNum = Number(e.target.value);
+                                        const startNum = form.getFieldValue('startQuestion');
+                                        checkDuplicateRange(startNum, endNum);
+                                    }}
+                                />
                             </Form.Item>
                         </div>
+
+                        {/* Duplicate Warning */}
+                        {duplicateWarning && (
+                            <Alert
+                                message={duplicateWarning}
+                                type="warning"
+                                showIcon
+                                style={{ marginBottom: 16 }}
+                                closable
+                            />
+                        )}
 
                         <div style={{ fontWeight: 500, marginBottom: 8, color: '#595959' }}>Danh sách câu hỏi:</div>
 
@@ -336,16 +409,29 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
                                 const endNum = Number(endQ);
                                 const numQuestions = Math.max(0, Math.min(54, endNum - startNum + 1)); // Max 54 questions for Part 7
 
-                                // Ensure questions array has the right length
+                                // Ensure questions array has the right length and correct question numbers
                                 const currentQuestions = getFieldValue('questions') || [];
+                                let needsUpdate = false;
+
                                 if (currentQuestions.length !== numQuestions) {
-                                    const newQuestions = Array(numQuestions).fill(null).map((_, i) =>
-                                        currentQuestions[i] || {
-                                            correctAnswer: 'A',
+                                    needsUpdate = true;
+                                } else if (currentQuestions.length > 0 && currentQuestions[0].questionNumber !== startNum) {
+                                    needsUpdate = true;
+                                }
+
+                                if (needsUpdate) {
+                                    const newQuestions = Array(numQuestions).fill(null).map((_, i) => {
+                                        const existing = currentQuestions[i] || {};
+                                        return {
+                                            ...existing,
+                                            correctAnswer: existing.correctAnswer || 'A',
                                             questionNumber: startNum + i
-                                        }
-                                    );
-                                    form.setFieldValue('questions', newQuestions);
+                                        };
+                                    });
+                                    // wrapper to avoid immediate state update loop during render
+                                    setTimeout(() => {
+                                        form.setFieldValue('questions', newQuestions);
+                                    }, 0);
                                 }
 
                                 return (

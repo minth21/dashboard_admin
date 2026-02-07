@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Modal, Form, Input, Select, Card, message, Button, Collapse } from 'antd';
+import { useState, useEffect } from 'react';
+import { Modal, Form, Input, Select, Card, message, Button, Collapse, Alert } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import ReactQuill from 'react-quill-new';
 import 'quill/dist/quill.snow.css';
@@ -18,6 +18,60 @@ interface CreatePart6ModalProps {
 export default function CreatePart6Modal({ open, onCancel, onSuccess, partId }: CreatePart6ModalProps) {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
+    const [existingQuestionNumbers, setExistingQuestionNumbers] = useState<number[]>([]);
+    const [duplicateWarning, setDuplicateWarning] = useState<string>('');
+
+    // Fetch existing questions when modal opens
+    useEffect(() => {
+        if (open && partId) {
+            fetchExistingQuestions();
+        }
+    }, [open, partId]);
+
+    const fetchExistingQuestions = async () => {
+        if (!partId) return;
+        try {
+            const response = await api.get(`/parts/${partId}/questions`);
+            if (response.data.success) {
+                const numbers = response.data.questions.map((q: any) => q.questionNumber);
+                setExistingQuestionNumbers(numbers);
+            }
+        } catch (error) {
+            console.error('Error fetching questions:', error);
+        }
+    };
+
+    const checkDuplicateRange = (startNum: number, endNum: number) => {
+        if (!startNum || !endNum) {
+            setDuplicateWarning('');
+            return;
+        }
+
+        const requestedNumbers = [];
+        for (let i = startNum; i <= endNum; i++) {
+            requestedNumbers.push(i);
+        }
+
+        const duplicates = requestedNumbers.filter(num => existingQuestionNumbers.includes(num));
+
+        if (duplicates.length > 0) {
+            // Find next available number
+            let nextAvailable = 131;
+            for (let i = 131; i <= 146; i++) {
+                if (!existingQuestionNumbers.includes(i)) {
+                    nextAvailable = i;
+                    break;
+                }
+            }
+
+            setDuplicateWarning(
+                `Các câu ${duplicates.join(', ')} đã tồn tại! Gợi ý: Bắt đầu từ câu ${nextAvailable}`
+            );
+        } else {
+            setDuplicateWarning('');
+        }
+    };
+
 
     const handleCreateBatchQuestions = async (values: any) => {
         if (!partId) return;
@@ -36,7 +90,7 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId }: 
             for (const item of passages) {
                 // Combine Title and Passage
                 const fullPassage = item.passageTitle
-                    ? `**${item.passageTitle}**\n\n${item.passage}`
+                    ? `<p><b>${item.passageTitle}</b></p>${item.passage}`
                     : item.passage;
 
                 const payload = {
@@ -143,7 +197,19 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId }: 
                                                 ]}
                                                 style={{ marginBottom: 0, width: 100 }}
                                             >
-                                                <Input type="number" min={131} max={146} placeholder="131" style={{ fontWeight: 600 }} />
+                                                <Input
+                                                    type="number"
+                                                    min={131}
+                                                    max={146}
+                                                    placeholder="131"
+                                                    style={{ fontWeight: 600 }}
+                                                    onChange={(e) => {
+                                                        const startNum = Number(e.target.value);
+                                                        const passages = form.getFieldValue('passages') || [];
+                                                        const endNum = passages[field.name]?.endQuestion;
+                                                        checkDuplicateRange(startNum, endNum);
+                                                    }}
+                                                />
                                             </Form.Item>
                                             <Form.Item
                                                 label="Đến câu"
@@ -163,9 +229,32 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId }: 
                                                 ]}
                                                 style={{ marginBottom: 0, width: 100 }}
                                             >
-                                                <Input type="number" min={131} max={146} placeholder="134" style={{ fontWeight: 600 }} />
+                                                <Input
+                                                    type="number"
+                                                    min={131}
+                                                    max={146}
+                                                    placeholder="134"
+                                                    style={{ fontWeight: 600 }}
+                                                    onChange={(e) => {
+                                                        const endNum = Number(e.target.value);
+                                                        const passages = form.getFieldValue('passages') || [];
+                                                        const startNum = passages[field.name]?.startQuestion;
+                                                        checkDuplicateRange(startNum, endNum);
+                                                    }}
+                                                />
                                             </Form.Item>
                                         </div>
+
+                                        {/* Duplicate Warning */}
+                                        {duplicateWarning && (
+                                            <Alert
+                                                message={duplicateWarning}
+                                                type="warning"
+                                                showIcon
+                                                style={{ marginBottom: 16 }}
+                                                closable
+                                            />
+                                        )}
 
                                         <Form.Item
                                             label="Tiêu đề (VD: Questions 131-134 refer to...)"
@@ -211,16 +300,31 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId }: 
 
                                                 const numQuestions = Math.max(0, Math.min(16, endQ - startQ + 1)); // Max 16 questions for Part 6
 
-                                                // Ensure questions array has the right length
+                                                // Ensure questions array has the right length and correct question numbers
                                                 const currentQuestions = getFieldValue(['passages', index, 'questions']) || [];
+                                                let needsUpdate = false;
+                                                const startNum = Number(startQ);
+
                                                 if (currentQuestions.length !== numQuestions) {
-                                                    const newQuestions = Array(numQuestions).fill(null).map((_, i) =>
-                                                        currentQuestions[i] || {
-                                                            correctAnswer: 'A',
-                                                            questionNumber: Number(startQ) + i
-                                                        }
-                                                    );
-                                                    form.setFieldValue(['passages', index, 'questions'], newQuestions);
+                                                    needsUpdate = true;
+                                                } else if (currentQuestions.length > 0 && currentQuestions[0].questionNumber !== startNum) {
+                                                    needsUpdate = true;
+                                                }
+
+                                                if (needsUpdate) {
+                                                    const newQuestions = Array(numQuestions).fill(null).map((_, i) => {
+                                                        const existing = currentQuestions[i] || {};
+                                                        return {
+                                                            ...existing,
+                                                            correctAnswer: existing.correctAnswer || 'A',
+                                                            questionNumber: startNum + i
+                                                        };
+                                                    });
+
+                                                    // Use setTimeout to avoid render loop
+                                                    setTimeout(() => {
+                                                        form.setFieldValue(['passages', index, 'questions'], newQuestions);
+                                                    }, 0);
                                                 }
 
                                                 return (
