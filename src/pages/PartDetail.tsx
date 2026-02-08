@@ -17,7 +17,8 @@ import {
     Drawer,
     Upload,
     Checkbox,
-    Radio
+    Radio,
+    Image as AntImage
 } from 'antd';
 
 const { Dragger } = Upload;
@@ -39,6 +40,11 @@ import * as XLSX from 'xlsx';
 
 import CreatePart6Modal from '../components/CreatePart6Modal';
 import CreatePart7Modal from '../components/CreatePart7Modal';
+import CreatePart1Modal from '../components/CreatePart1Modal';
+import EditPart1Modal from '../components/EditPart1Modal';
+import CreatePart2BulkModal from '../components/CreatePart2BulkModal'; // Changed from CreatePart2Modal
+import CreatePart3Modal from '../components/CreatePart3Modal';
+import AudioPlayer from '../components/AudioPlayer';
 import api from '../services/api';
 
 // --- Interfaces ---
@@ -46,6 +52,8 @@ interface Question {
     id: string;
     questionNumber: number;
     questionText?: string;
+    imageUrl?: string; // Add imageUrl
+    audioUrl?: string; // Add audioUrl
     optionA?: string;
     optionB?: string;
     optionC?: string;
@@ -62,6 +70,7 @@ interface Part {
     instructions?: string;
     totalQuestions: number;
     testId: string;
+    audioUrl?: string;
 }
 
 const { Option } = Select;
@@ -80,6 +89,10 @@ export default function PartDetail() {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [createPart6ModalVisible, setCreatePart6ModalVisible] = useState(false);
     const [createPart7ModalVisible, setCreatePart7ModalVisible] = useState(false);
+    const [createPart1ModalVisible, setCreatePart1ModalVisible] = useState(false);
+    const [editPart1ModalVisible, setEditPart1ModalVisible] = useState(false);
+    const [createPart2ModalVisible, setCreatePart2ModalVisible] = useState(false); // Now for bulk modal
+    const [createPart3ModalVisible, setCreatePart3ModalVisible] = useState(false);
 
     // Passage Edit State
     const [editPassageModalVisible, setEditPassageModalVisible] = useState(false);
@@ -115,6 +128,9 @@ export default function PartDetail() {
     ];
 
     const isPart6 = part?.partNumber === 6;
+    const isListeningGroup = part?.partNumber === 3 || part?.partNumber === 4;
+
+    const handleCreateSuccess = () => fetchQuestions();
 
     // --- Effects ---
     useEffect(() => {
@@ -141,7 +157,6 @@ export default function PartDetail() {
         try {
             setLoading(true);
             const response = await api.get(`/parts/${partId}/questions`);
-            console.log('DEBUG API RESPONSE:', response.data); // Log full API response
             if (response.data.success) {
                 setQuestions(response.data.questions);
             }
@@ -290,6 +305,38 @@ export default function PartDetail() {
         }
     };
 
+    // --- Handlers: Audio Upload (Part 1-4) ---
+    const handlePartAudioUpload = async (file: File) => {
+        if (!partId) return false;
+        try {
+            message.loading({ content: 'Đang upload audio...', key: 'uploadAudio' });
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            // 1. Upload to Cloudinary
+            const uploadRes = await api.post('/upload/audio', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            if (uploadRes.data.success) {
+                const audioUrl = uploadRes.data.url;
+
+                // 2. Update Part with new Audio URL
+                await api.patch(`/parts/${partId}`, { audioUrl });
+
+                message.success({ content: 'Upload audio thành công!', key: 'uploadAudio' });
+                // Update local part state
+                setPart(prev => prev ? { ...prev, audioUrl } : null);
+            } else {
+                throw new Error(uploadRes.data.message);
+            }
+        } catch (error: any) {
+            console.error('Upload audio error:', error);
+            message.error({ content: error.message || 'Lỗi khi upload audio', key: 'uploadAudio' });
+        }
+        return false;
+    };
+
     // --- Handlers: Import ---
     const handleDownloadTemplate = () => {
         if (!part) return;
@@ -374,12 +421,13 @@ export default function PartDetail() {
         // Sort questions by number
         const sortedQuestions = [...questions].sort((a, b) => a.questionNumber - b.questionNumber);
 
-        // Group by passage (normalized)
-        const newGroups: { passage: string; questions: Question[] }[] = [];
-        let currentGroup: { passage: string; questions: Question[] } | null = null;
+        // Group by passage (normalized) OR audioUrl (for listening)
+        const newGroups: { passage: string; audioUrl?: string; questions: Question[] }[] = [];
+        let currentGroup: { passage: string; audioUrl?: string; questions: Question[] } | null = null;
 
         // Normalization: Remove HTML tags and extra whitespace to compare text content only
-        const normalizePassageContent = (p?: string) => {
+        const normalizePassageContent = (p?: string, a?: string) => {
+            if (a) return a; // If audio exists, group by audio URL
             if (!p) return '';
             // If passage contains images (Part 7), do not strip tags as the URL differentiates groups
             if (p.includes('<img')) {
@@ -391,12 +439,14 @@ export default function PartDetail() {
 
         sortedQuestions.forEach((q) => {
             const passage = q.passage || '';
-            const normalizedPassage = normalizePassageContent(passage);
-            const lastGroupPassage = currentGroup ? normalizePassageContent(currentGroup.passage) : '';
+            const audioUrl = q.audioUrl;
 
-            // Group if content matches (ignoring HTML structure differences)
-            if (!currentGroup || normalizedPassage !== lastGroupPassage) {
-                currentGroup = { passage: passage, questions: [] };
+            const normalizedContent = normalizePassageContent(passage, audioUrl);
+            const lastGroupContent = currentGroup ? normalizePassageContent(currentGroup.passage, currentGroup.audioUrl) : '';
+
+            // Group if content matches
+            if (!currentGroup || normalizedContent !== lastGroupContent) {
+                currentGroup = { passage: passage, audioUrl: audioUrl, questions: [] };
                 newGroups.push(currentGroup);
             }
             currentGroup.questions.push(q);
@@ -449,69 +499,78 @@ export default function PartDetail() {
                                         }}
                                         style={{ marginRight: 12 }}
                                     />
-                                    <div style={{ fontWeight: 600, color: '#1890ff' }}>Đoạn văn {index + 1}:</div>
+                                    <div style={{ fontWeight: 600, color: '#1890ff' }}>
+                                        {isListeningGroup ? `Bài nghe ${index + 1}:` : `Đoạn văn ${index + 1}:`}
+                                    </div>
                                 </div>
-                                <Button size="small" type="primary" ghost icon={<EditOutlined />} onClick={() => {
-                                    setCurrentPassageQuestions(group.questions);
-                                    const passageHtml = group.passage || '';
+                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    {isListeningGroup && group.audioUrl && (
+                                        <div style={{ width: 300, marginRight: 10 }}>
+                                            <AudioPlayer src={group.audioUrl} />
+                                        </div>
+                                    )}
+                                    {!isListeningGroup && (
+                                        <Button size="small" type="primary" ghost icon={<EditOutlined />} onClick={() => {
+                                            setCurrentPassageQuestions(group.questions);
+                                            // ... existing edit passage logic ...
+                                            // (Simplifying for brevity - reusing existing logic call)
+                                            const passageHtml = group.passage || '';
+                                            if (part?.partNumber === 7) {
+                                                // ... logic from before ...
+                                                // Detect content type
+                                                const hasImg = passageHtml.includes('<img');
+                                                // Check for non-empty text content (stripping tags)
+                                                const textContent = passageHtml.replace(/<img[^>]*>/g, '').replace(/<[^>]*>/g, '').trim();
+                                                const hasText = textContent.length > 0;
 
-                                    if (part?.partNumber === 7) {
-                                        // Detect content type
-                                        const hasImg = passageHtml.includes('<img');
-                                        // Check for non-empty text content (stripping tags)
-                                        const textContent = passageHtml.replace(/<img[^>]*>/g, '').replace(/<[^>]*>/g, '').trim();
-                                        const hasText = textContent.length > 0;
+                                                let type = 'text';
+                                                if (hasImg && hasText) type = 'both';
+                                                else if (hasImg) type = 'image';
 
-                                        let type = 'text';
-                                        if (hasImg && hasText) type = 'both';
-                                        else if (hasImg) type = 'image';
+                                                // Set initial type
+                                                passageForm.setFieldsValue({ passageType: type });
 
-                                        // Set initial type
-                                        passageForm.setFieldsValue({ passageType: type });
-
-                                        // Parse Images
-                                        const imgRegex = /<img[^>]+src="([^">]+)"/g;
-                                        let match;
-                                        const files = [];
-                                        let idCounter = 0;
-                                        while ((match = imgRegex.exec(passageHtml)) !== null) {
-                                            files.push({
-                                                uid: `-${idCounter++}`,
-                                                name: `image-${idCounter}.png`,
-                                                status: 'done',
-                                                url: match[1]
-                                            });
-                                        }
-                                        setEditPassageFileList(files);
-
-                                        // Set Text Content (Remove images for the text editor)
-                                        // If type is 'image', we might still want to clear the 'passage' field? 
-                                        // Or keep it if they switch types. 
-                                        // Let's remove img tags from the text shown in editor.
-                                        const cleanText = passageHtml.replace(/<img[^>]*>/g, '');
-                                        passageForm.setFieldsValue({ passageFiles: files, passage: cleanText });
-
-                                    } else {
-                                        passageForm.setFieldsValue({ passage: group.passage });
-                                    }
-                                    setEditPassageModalVisible(true);
-                                }}>
-                                    Sửa đoạn văn
-                                </Button>
+                                                // Parse Images
+                                                const imgRegex = /<img[^>]+src="([^">]+)"/g;
+                                                let match;
+                                                const files = [];
+                                                let idCounter = 0;
+                                                while ((match = imgRegex.exec(passageHtml)) !== null) {
+                                                    files.push({
+                                                        uid: `-${idCounter++}`,
+                                                        name: `image-${idCounter}.png`,
+                                                        status: 'done',
+                                                        url: match[1]
+                                                    });
+                                                }
+                                                setEditPassageFileList(files);
+                                                const cleanText = passageHtml.replace(/<img[^>]*>/g, '');
+                                                passageForm.setFieldsValue({ passageFiles: files, passage: cleanText });
+                                            } else {
+                                                passageForm.setFieldsValue({ passage: group.passage });
+                                            }
+                                            setEditPassageModalVisible(true);
+                                        }}>
+                                            Sửa nội dung
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
-                            <div
-                                className="passage-content"
-                                dangerouslySetInnerHTML={{
-                                    __html: (group.passage || '<p><i>(Không có nội dung đoạn văn)</i></p>')
-                                        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Support markdown bold for legacy data
-                                }}
-                                style={{
-                                    wordWrap: 'break-word',
-                                    overflowWrap: 'break-word',
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word'
-                                }}
-                            />
+                            {!isListeningGroup && (
+                                <div
+                                    className="passage-content"
+                                    dangerouslySetInnerHTML={{
+                                        __html: (group.passage || '<p><i>(Không có nội dung đoạn văn)</i></p>')
+                                            .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Support markdown bold for legacy data
+                                    }}
+                                    style={{
+                                        wordWrap: 'break-word',
+                                        overflowWrap: 'break-word',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word'
+                                    }}
+                                />
+                            )}
                         </div>
                         <div style={{ padding: '16px' }}>
                             <List
@@ -557,11 +616,11 @@ export default function PartDetail() {
 
 
     const columns: ColumnsType<Question> = [
-        {
+        ...(part?.partNumber !== 1 ? [{
             title: 'Câu hỏi',
             dataIndex: 'questionText',
             key: 'questionText',
-            render: (text, record) => (
+            render: (text: string, record: Question) => (
                 <div>
                     <div style={{ display: 'flex', alignItems: 'flex-start' }}>
                         <b style={{ marginRight: 5, whiteSpace: 'nowrap' }}>{record.questionNumber}.</b>
@@ -579,7 +638,58 @@ export default function PartDetail() {
                     </div>
                 </div>
             )
-        },
+        }] : []),
+        // Hide 'Nội dung' column for Part 5
+        ...(part?.partNumber !== 5 ? [{
+            title: 'Nội dung',
+            key: 'content',
+            render: (_: any, record: Question) => (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                    {/* Part 1 Question Number */}
+                    {Number(part?.partNumber) === 1 && (
+                        <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#1890ff', marginBottom: 8 }}>
+                            Câu {record.questionNumber}
+                        </div>
+                    )}
+                    {/* Part 1 & 2: Image/Audio */}
+                    {(Number(part?.partNumber) === 1 || Number(part?.partNumber) === 2) && (
+                        <>
+                            {record.imageUrl && (
+                                <div style={{ marginBottom: 8 }}>
+                                    <AntImage src={record.imageUrl} width={150} style={{ borderRadius: 8 }} />
+                                </div>
+                            )}
+                            {record.audioUrl && (
+                                <div style={{ marginBottom: 8 }}>
+                                    <AudioPlayer src={record.audioUrl} />
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* Question Text - Hide for Part 5 */}
+                    {part?.partNumber !== 5 && (
+                        <div
+                            dangerouslySetInnerHTML={{
+                                __html: (record.questionText || '')
+                                    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                            }}
+                        />
+                    )}
+
+                    {/* Options */}
+                    {(!isPart6 && part?.partNumber !== 7 && part?.partNumber !== 3 && part?.partNumber !== 4) && (
+                        <div style={{ marginTop: 8 }}>
+                            <Tag color={record.correctAnswer === 'A' ? 'success' : 'default'}>A. {record.optionA}</Tag>
+                            <Tag color={record.correctAnswer === 'B' ? 'success' : 'default'}>B. {record.optionB}</Tag>
+                            <Tag color={record.correctAnswer === 'C' ? 'success' : 'default'}>C. {record.optionC}</Tag>
+                            {/* Part 2 only has 3 options usually */}
+                            {record.optionD && <Tag color={record.correctAnswer === 'D' ? 'success' : 'default'}>D. {record.optionD}</Tag>}
+                        </div>
+                    )}
+                </Space>
+            ),
+        }] : []),
         {
             title: 'Đáp án',
             dataIndex: 'correctAnswer',
@@ -594,8 +704,12 @@ export default function PartDetail() {
             render: (_, record) => (
                 <Button type="link" icon={<EditOutlined />} onClick={() => {
                     setEditingQuestion(record);
-                    editForm.setFieldsValue(record);
-                    setEditModalVisible(true);
+                    if (part?.partNumber === 1) {
+                        setEditPart1ModalVisible(true);
+                    } else {
+                        editForm.setFieldsValue(record);
+                        setEditModalVisible(true);
+                    }
                 }}>Sửa</Button>
             )
         }
@@ -618,6 +732,35 @@ export default function PartDetail() {
                     </Space>
                 </div>
 
+                {/* Part Audio Player (Common for all questions) - Only for Listening Parts (1-4) */}
+                {(part.partNumber >= 1 && part.partNumber <= 4) && (
+                    <Card size="small" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1 }}>
+                                <span style={{ fontWeight: 500, color: '#389e0d' }}>Audio:</span>
+                                {part.audioUrl ? (
+                                    <div style={{ flex: 1 }}>
+                                        <AudioPlayer src={part.audioUrl} />
+                                    </div>
+                                ) : (
+                                    <span style={{ color: '#888', fontStyle: 'italic' }}>Chưa có file nghe chung cho phần này</span>
+                                )}
+                            </div>
+                            <div>
+                                <Upload
+                                    beforeUpload={handlePartAudioUpload}
+                                    showUploadList={false}
+                                    accept="audio/*"
+                                >
+                                    <Button icon={<UploadOutlined />} type={part.audioUrl ? 'default' : 'primary'}>
+                                        {part.audioUrl ? 'Upload Audio' : 'Upload Audio'}
+                                    </Button>
+                                </Upload>
+                            </div>
+                        </div>
+                    </Card>
+                )}
+
                 {/* Toolbar */}
                 <Card bodyStyle={{ padding: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -628,12 +771,14 @@ export default function PartDetail() {
                                 onClick={() => {
                                     if (isPart6) setCreatePart6ModalVisible(true);
                                     else if (part.partNumber === 7) setCreatePart7ModalVisible(true);
+                                    else if (part.partNumber === 1) setCreatePart1ModalVisible(true); // Part 1 specific modal
+                                    else if (part.partNumber === 2) setCreatePart2ModalVisible(true); // Part 2 specific modal
                                     else setCreateModalVisible(true);
                                 }}
                             >
                                 {isPart6 || part.partNumber === 7 ? 'Thêm đoạn văn' : 'Thêm mới'}
                             </Button>
-                            {part?.partNumber !== 6 && part?.partNumber !== 7 && (
+                            {part?.partNumber !== 6 && part?.partNumber !== 7 && part?.partNumber !== 1 && part?.partNumber !== 2 && (
                                 <Button icon={<UploadOutlined />} onClick={() => setImportDrawerVisible(true)}>
                                     Import Excel
                                 </Button>
@@ -676,6 +821,39 @@ export default function PartDetail() {
             </Space>
 
             {/* Modals */}
+            <CreatePart1Modal
+                open={createPart1ModalVisible}
+                onCancel={() => setCreatePart1ModalVisible(false)}
+                onSuccess={handleCreateSuccess}
+                partId={partId || null}
+            />
+
+            <CreatePart2BulkModal
+                open={createPart2ModalVisible}
+                onCancel={() => setCreatePart2ModalVisible(false)}
+                onSuccess={handleCreateSuccess}
+                partId={partId || null}
+                currentAudioUrl={part?.audioUrl}
+            />
+
+            <CreatePart3Modal
+                open={createPart3ModalVisible}
+                onCancel={() => setCreatePart3ModalVisible(false)}
+                onSuccess={handleCreateSuccess}
+                partId={partId || null}
+                partNumber={part?.partNumber || 3}
+            />
+
+            {/* Removed duplicate CreatePart2Modal */}
+
+            <CreatePart3Modal
+                open={createPart3ModalVisible}
+                onCancel={() => setCreatePart3ModalVisible(false)}
+                onSuccess={handleCreateSuccess}
+                partId={partId || null}
+                partNumber={part?.partNumber || 3}
+            />
+
             <CreatePart6Modal
                 open={createPart6ModalVisible}
                 onCancel={() => setCreatePart6ModalVisible(false)}
@@ -809,10 +987,7 @@ export default function PartDetail() {
                 <Form form={passageForm} layout="vertical" onFinish={handleUpdatePassage}>
                     {part?.partNumber === 7 && (
                         <Form.Item name="passageType" initialValue="both" style={{ marginBottom: 16 }}>
-                            <Radio.Group onChange={(e) => {
-                                // Force re-render or handle logic if needed
-                                // form values are handled by Antd Form
-                            }}>
+                            <Radio.Group>
                                 <Radio.Button value="text">Văn bản</Radio.Button>
                                 <Radio.Button value="image">Hình ảnh</Radio.Button>
                                 <Radio.Button value="both">Cả hai</Radio.Button>
@@ -921,6 +1096,25 @@ export default function PartDetail() {
                     />
                 </Space>
             </Drawer>
+
+            {/* Create Part 1 Modal */}
+            <CreatePart1Modal
+                open={createPart1ModalVisible}
+                onCancel={() => setCreatePart1ModalVisible(false)}
+                onSuccess={handleCreateSuccess}
+                partId={partId || null}
+            />
+
+            {/* Edit Part 1 Modal */}
+            <EditPart1Modal
+                open={editPart1ModalVisible}
+                onCancel={() => {
+                    setEditPart1ModalVisible(false);
+                    setEditingQuestion(null);
+                }}
+                onSuccess={handleCreateSuccess}
+                question={editingQuestion}
+            />
         </div>
     );
 }

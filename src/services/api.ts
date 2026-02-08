@@ -49,4 +49,38 @@ export const authApi = {
     },
 };
 
+/**
+ * Upload image file to server
+ * Uses axios with proper FormData configuration
+ */
+export const uploadImage = async (file: File | Blob): Promise<{ success: boolean; url: string; publicId: string; message?: string }> => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await api.post('/upload/image', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+
+    return response.data;
+};
+
+/**
+ * Upload audio file to server
+ * Uses axios with proper FormData configuration
+ */
+export const uploadAudio = async (file: File | Blob): Promise<{ success: boolean; url: string; publicId: string; message?: string }> => {
+    const formData = new FormData();
+    formData.append('audio', file);
+
+    const response = await api.post('/upload/audio', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+
+    return response.data;
+};
+
 export default api;

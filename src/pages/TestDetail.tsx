@@ -11,22 +11,23 @@ import {
     message,
     Tag,
     Space,
-    Descriptions,
-    Popconfirm,
+    Descriptions, // Added
+    Popconfirm, // Added
     Select,
     Progress,
+    Upload,
 } from 'antd';
 import {
     ArrowLeftOutlined,
-    PlusOutlined,
+    PlusOutlined, // Added
     EditOutlined,
     DeleteOutlined,
     FileTextOutlined,
+    UploadOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import ReactQuill from 'react-quill-new';
-import 'quill/dist/quill.snow.css';
 import api from '../services/api';
+import InstructionEditor from '../components/InstructionEditor';
 
 const { Option } = Select;
 
@@ -49,23 +50,25 @@ interface Part {
     partName: string;
     totalQuestions: number;
     instructions?: string;
-    status: string;
+    instructionImgUrl?: string;
+    status: 'ACTIVE' | 'INACTIVE';
     orderIndex: number;
     completedQuestions: number;
     createdAt: string;
     updatedAt: string;
-    timeLimit?: number; // in minutes
+    timeLimit?: number; // in seconds
+    audioUrl?: string;
 }
 
 // Auto-fill configuration for parts
 const PART_CONFIG: Record<number, { name: string; totalQuestions: number; timeLimit: number }> = {
-    1: { name: 'Part 1: Photographs', totalQuestions: 6, timeLimit: 5 },
-    2: { name: 'Part 2: Question-Response', totalQuestions: 25, timeLimit: 8 },
-    3: { name: 'Part 3: Conversations', totalQuestions: 39, timeLimit: 17 },
-    4: { name: 'Part 4: Talks', totalQuestions: 30, timeLimit: 15 },
-    5: { name: 'Part 5: Incomplete Sentences', totalQuestions: 30, timeLimit: 10 },
-    6: { name: 'Part 6: Text Completion', totalQuestions: 16, timeLimit: 8 },
-    7: { name: 'Part 7: Reading Comprehension', totalQuestions: 54, timeLimit: 54 },
+    1: { name: 'Part 1: Photographs', totalQuestions: 6, timeLimit: 300 }, // 5 mins
+    2: { name: 'Part 2: Question-Response', totalQuestions: 25, timeLimit: 480 }, // 8 mins
+    3: { name: 'Part 3: Conversations', totalQuestions: 39, timeLimit: 1020 }, // 17 mins
+    4: { name: 'Part 4: Talks', totalQuestions: 30, timeLimit: 900 }, // 15 mins
+    5: { name: 'Part 5: Incomplete Sentences', totalQuestions: 30, timeLimit: 600 }, // 10 mins
+    6: { name: 'Part 6: Text Completion', totalQuestions: 16, timeLimit: 480 }, // 8 mins
+    7: { name: 'Part 7: Reading Comprehension', totalQuestions: 54, timeLimit: 3240 }, // 54 mins
 };
 
 export default function TestDetail() {
@@ -80,9 +83,11 @@ export default function TestDetail() {
     const [form] = Form.useForm();
     const [createForm] = Form.useForm();
 
-    // Create/Edit Instructions State
     const [createInstructions, setCreateInstructions] = useState('');
     const [editInstructions, setEditInstructions] = useState('');
+
+    // Part Audio Edit State
+    const [editPartAudioFileList, setEditPartAudioFileList] = useState<any[]>([]);
 
     // Bulk Actions State
     const [selectedPartIds, setSelectedPartIds] = useState<string[]>([]);
@@ -98,7 +103,7 @@ export default function TestDetail() {
         try {
             const response = await api.get(`/tests/${testId}`);
             if (response.data.success) {
-                setTest(response.data.data);
+                setTest(response.data.test);
             }
         } catch (error) {
             message.error('Không thể tải thông tin đề thi');
@@ -127,11 +132,20 @@ export default function TestDetail() {
         }
 
         try {
+            // Calculate timeLimit from hours, minutes, and seconds
+            const timeLimit = (values.timeLimitHours || 0) * 3600 + (values.timeLimitMinutes || 0) * 60 + (values.timeLimitSeconds || 0);
+
             const response = await api.post(`/tests/${testId}/parts`, {
                 ...values,
+                timeLimit,
                 instructions: createInstructions,
                 status: 'INACTIVE', // Default to inactive when creating
             });
+
+            // Remove temp fields
+            delete (values as any).timeLimitHours;
+            delete (values as any).timeLimitMinutes;
+            delete (values as any).timeLimitSeconds;
 
             if (response.data.success) {
                 message.success('Tạo Part thành công!');
@@ -150,11 +164,26 @@ export default function TestDetail() {
     const handleEdit = (part: Part) => {
         setEditingPart(part);
         setEditInstructions(part.instructions || '');
+
+        // Initialize audio file list if part has audioUrl
+        if (part.audioUrl) {
+            setEditPartAudioFileList([{
+                uid: '-1',
+                name: 'Audio hiện tại',
+                status: 'done',
+                url: part.audioUrl,
+            }]);
+        } else {
+            setEditPartAudioFileList([]);
+        }
+
         form.setFieldsValue({
             partNumber: part.partNumber,
             partName: part.partName,
             totalQuestions: part.totalQuestions,
-            timeLimit: part.timeLimit || 10,
+            timeLimitHours: Math.floor((part.timeLimit || 0) / 3600),
+            timeLimitMinutes: Math.floor(((part.timeLimit || 0) % 3600) / 60),
+            timeLimitSeconds: (part.timeLimit || 0) % 60,
             orderIndex: part.orderIndex,
             status: part.status,
         });
@@ -171,10 +200,37 @@ export default function TestDetail() {
         }
 
         try {
+            let infoAudioUrl = editingPart.audioUrl;
+
+            // Handle Audio Upload if changed
+            if (editPartAudioFileList.length > 0 && editPartAudioFileList[0].originFileObj) {
+                const audioFormData = new FormData();
+                audioFormData.append('audio', editPartAudioFileList[0].originFileObj);
+                const audioRes = await api.post('/upload/audio', audioFormData);
+                if (audioRes.data.success) {
+                    infoAudioUrl = audioRes.data.url;
+                } else {
+                    message.error('Upload audio thất bại');
+                    return;
+                }
+            } else if (editPartAudioFileList.length === 0) {
+                infoAudioUrl = undefined; // Removed audio
+            }
+
+            // Calculate timeLimit
+            const timeLimit = (values.timeLimitHours || 0) * 3600 + (values.timeLimitMinutes || 0) * 60 + (values.timeLimitSeconds || 0);
+
             const response = await api.patch(`/parts/${editingPart.id}`, {
                 ...values,
+                timeLimit,
                 instructions: editInstructions,
+                audioUrl: infoAudioUrl,
             });
+
+            // Remove temp fields
+            delete (values as any).timeLimitHours;
+            delete (values as any).timeLimitMinutes;
+            delete (values as any).timeLimitSeconds;
 
             if (response.data.success) {
                 message.success('Cập nhật Part thành công!');
@@ -295,12 +351,23 @@ export default function TestDetail() {
             align: 'center',
         },
         {
-            title: 'Thời gian làm bài',
+            title: 'Thời gian',
             dataIndex: 'timeLimit',
             key: 'timeLimit',
             width: 150,
             align: 'center',
-            render: (timeLimit) => timeLimit ? `${timeLimit}` : '-',
+            render: (timeLimit) => {
+                if (!timeLimit) return '-';
+                const h = Math.floor(timeLimit / 3600);
+                const m = Math.floor((timeLimit % 3600) / 60);
+                const s = timeLimit % 60;
+
+                let result = '';
+                if (h > 0) result += `${h}h `;
+                if (m > 0) result += `${m}m `;
+                if (s > 0) result += `${s}s`;
+                return result.trim() || '0s';
+            },
         },
         {
             title: 'Tiến độ',
@@ -385,35 +452,19 @@ export default function TestDetail() {
         const content = isCreate ? createInstructions : editInstructions;
         const setContent = isCreate ? setCreateInstructions : setEditInstructions;
 
-        const quillModules = {
-            toolbar: [
-                ['bold', 'italic', 'underline'],
-                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                ['clean']
-            ]
-        };
-
-        const quillFormats = [
-            'bold', 'italic', 'underline',
-            'list', 'bullet'
-        ];
-
         return (
             <>
                 <div style={{ marginBottom: 16 }}>
                     <p style={{ color: '#666', marginBottom: 8 }}>
                         Viết hướng dẫn cho học viên khi làm bài Part này.
+                        Bạn có thể chèn ảnh minh họa trực tiếp vào nội dung.
                     </p>
                 </div>
 
-                <ReactQuill
-                    theme="snow"
+                <InstructionEditor
                     value={content}
                     onChange={setContent}
-                    modules={quillModules}
-                    formats={quillFormats}
                     placeholder="Nhập hướng dẫn cho Part này..."
-                    style={{ backgroundColor: '#fff', minHeight: '200px' }}
                 />
             </>
         );
@@ -435,7 +486,7 @@ export default function TestDetail() {
                     <Card>
                         <Descriptions title="Thông tin đề thi" column={2}>
                             <Descriptions.Item label="Tiêu đề">{test.title}</Descriptions.Item>
-                            <Descriptions.Item label="Loại đề">
+                            <Descriptions.Item label="Loại bài">
                                 {test.testType === 'LISTENING' ? 'Listening' : 'Reading'}
                             </Descriptions.Item>
                             <Descriptions.Item label="Độ khó">
@@ -534,13 +585,15 @@ export default function TestDetail() {
                                     createForm.setFieldsValue({
                                         partName: config.name,
                                         totalQuestions: config.totalQuestions,
-                                        timeLimit: config.timeLimit,
+                                        timeLimitHours: Math.floor(config.timeLimit / 3600),
+                                        timeLimitMinutes: Math.floor((config.timeLimit % 3600) / 60),
+                                        timeLimitSeconds: config.timeLimit % 60,
                                         orderIndex: value,
                                     });
                                 }
                             }}
                         >
-                            {test?.testType === 'LISTENING' ? (
+                            {test?.testType?.toUpperCase() === 'LISTENING' ? (
                                 <>
                                     <Option value={1}>{PART_CONFIG[1].name}</Option>
                                     <Option value={2}>{PART_CONFIG[2].name}</Option>
@@ -573,15 +626,30 @@ export default function TestDetail() {
                         <InputNumber min={1} style={{ width: '100%' }} />
                     </Form.Item>
 
-                    <Form.Item
-                        label="Thời gian làm bài (phút)"
-                        name="timeLimit"
-                        rules={[
-                            { required: true, message: 'Vui lòng nhập thời gian' },
-                            { type: 'number', min: 1, message: 'Thời gian phải lớn hơn 0' }
-                        ]}
-                    >
-                        <InputNumber min={1} style={{ width: '100%' }} addonAfter="phút" />
+                    <Form.Item label="Thời gian làm bài" required style={{ marginBottom: 0 }}>
+                        <Space align="baseline" style={{ display: 'flex' }}>
+                            <Form.Item
+                                name="timeLimitHours"
+                                rules={[{ type: 'number', min: 0 }]}
+                                initialValue={0}
+                            >
+                                <InputNumber min={0} style={{ width: 80 }} addonAfter="giờ" />
+                            </Form.Item>
+                            <Form.Item
+                                name="timeLimitMinutes"
+                                rules={[{ type: 'number', min: 0, max: 59 }]}
+                                initialValue={0}
+                            >
+                                <InputNumber min={0} max={59} style={{ width: 80 }} addonAfter="phút" />
+                            </Form.Item>
+                            <Form.Item
+                                name="timeLimitSeconds"
+                                rules={[{ type: 'number', min: 0, max: 59 }]}
+                                initialValue={0}
+                            >
+                                <InputNumber min={0} max={59} style={{ width: 80 }} addonAfter="giây" />
+                            </Form.Item>
+                        </Space>
                     </Form.Item>
 
                     <Form.Item label="Hướng dẫn (bắt buộc)" required>
@@ -604,6 +672,7 @@ export default function TestDetail() {
                     setEditingPart(null);
                     setEditInstructions('');
                     form.resetFields();
+                    setEditPartAudioFileList([]); // Clear audio file list on cancel
                 }}
                 onOk={() => form.submit()}
                 okText="Lưu"
@@ -647,25 +716,61 @@ export default function TestDetail() {
                         <InputNumber min={1} style={{ width: '100%' }} />
                     </Form.Item>
 
-                    <Form.Item
-                        label="Thời gian làm bài (phút)"
-                        name="timeLimit"
-                        rules={[
-                            { required: true, message: 'Vui lòng nhập thời gian' },
-                            { type: 'number', min: 1, message: 'Thời gian phải lớn hơn 0' }
-                        ]}
-                    >
-                        <InputNumber min={1} style={{ width: '100%' }} addonAfter="phút" />
+                    <Form.Item label="Thời gian làm bài" required style={{ marginBottom: 0 }}>
+                        <Space align="baseline" style={{ display: 'flex' }}>
+                            <Form.Item
+                                name="timeLimitHours"
+                                rules={[{ type: 'number', min: 0 }]}
+                            >
+                                <InputNumber min={0} style={{ width: 80 }} addonAfter="giờ" />
+                            </Form.Item>
+                            <Form.Item
+                                name="timeLimitMinutes"
+                                rules={[{ type: 'number', min: 0, max: 59 }]}
+                            >
+                                <InputNumber min={0} max={59} style={{ width: 80 }} addonAfter="phút" />
+                            </Form.Item>
+                            <Form.Item
+                                name="timeLimitSeconds"
+                                rules={[{ type: 'number', min: 0, max: 59 }]}
+                            >
+                                <InputNumber min={0} max={59} style={{ width: 80 }} addonAfter="giây" />
+                            </Form.Item>
+                        </Space>
                     </Form.Item>
 
                     <Form.Item label="Hướng dẫn (bắt buộc)" required>
-                        {renderInstructionsField(false)}
+                        <div style={{ marginBottom: 50, height: 280 }}>
+                            <InstructionEditor
+                                value={editInstructions}
+                                onChange={setEditInstructions}
+                                style={{ height: '100%' }}
+                            />
+                        </div>
                     </Form.Item>
 
-                    <Form.Item name="status" label="Trạng thái">
+                    {/* Audio Upload - Only for Listening Parts (1-4) */}
+                    {editingPart && editingPart.partNumber >= 1 && editingPart.partNumber <= 4 && (
+                        <Form.Item label="Audio">
+                            <Upload
+                                fileList={editPartAudioFileList}
+                                beforeUpload={(file) => {
+                                    setEditPartAudioFileList([file]);
+                                    return false;
+                                }}
+                                onRemove={() => setEditPartAudioFileList([])}
+                                maxCount={1}
+                                accept="audio/*"
+                            >
+                                <Button icon={<UploadOutlined />}>Upload audio</Button>
+                            </Upload>
+                        </Form.Item>
+                    )}
+
+                    <Form.Item name="status" label="Trạng thái" initialValue="ACTIVE">
                         <Select>
-                            <Option value="ACTIVE">Hoạt động</Option>
-                            <Option value="INACTIVE">Vô hiệu hóa</Option>
+                            <Option value="ACTIVE">Mở</Option>
+                            <Option value="INACTIVE">Khóa</Option>
                         </Select>
                     </Form.Item>
 
@@ -675,6 +780,6 @@ export default function TestDetail() {
                     </Form.Item>
                 </Form>
             </Modal>
-        </div>
+        </div >
     );
 }

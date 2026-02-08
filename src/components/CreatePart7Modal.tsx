@@ -4,7 +4,7 @@ import { InboxOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import ReactQuill from 'react-quill-new';
 import 'quill/dist/quill.snow.css';
-import api from '../services/api';
+import api, { uploadImage } from '../services/api';
 
 const { Option } = Select;
 const { Dragger } = Upload;
@@ -115,20 +115,12 @@ export default function CreatePart7Modal({ open, onCancel, onSuccess, partId }: 
                     const fileToUpload = file.originFileObj || (file as any);
 
                     if (fileToUpload) {
-                        const formData = new FormData();
-                        formData.append('image', fileToUpload);
+                        const res = await uploadImage(fileToUpload);
 
-                        const res = await api.post('/upload/image', formData, {
-                            headers: {
-                                'Content-Type': undefined
-                            }
-                        });
-
-
-                        if (res.data.success) {
-                            uploadedUrls.push(res.data.url);
+                        if (res.success) {
+                            uploadedUrls.push(res.url);
                         } else {
-                            throw new Error(res.data.message || 'Failed to upload image');
+                            throw new Error(res.message || 'Failed to upload image');
                         }
                     }
                 }
