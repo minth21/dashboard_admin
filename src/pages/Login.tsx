@@ -19,6 +19,7 @@ export default function Login() {
                 // Check if user is ADMIN
                 if (response.user.role !== 'ADMIN') {
                     message.error('Bạn không có quyền truy cập Trang quản trị!');
+                    setLoading(false);
                     return;
                 }
 
@@ -30,10 +31,10 @@ export default function Login() {
                 navigate('/dashboard');
             } else {
                 message.error(response.message || 'Đăng nhập thất bại');
+                setLoading(false);
             }
         } catch (error: any) {
             message.error(error.response?.data?.message || 'Lỗi kết nối server');
-        } finally {
             setLoading(false);
         }
     };
@@ -45,33 +46,70 @@ export default function Login() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: '#F8FAFC',
+                background: 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)',
+                position: 'relative',
+                overflow: 'hidden',
             }}
         >
+            {/* Decorative background blobs */}
+            <div style={{
+                position: 'absolute',
+                width: '500px',
+                height: '500px',
+                background: 'radial-gradient(circle, rgba(37, 99, 235, 0.05) 0%, transparent 70%)',
+                top: '-100px',
+                right: '-100px',
+            }} />
+            <div style={{
+                position: 'absolute',
+                width: '400px',
+                height: '400px',
+                background: 'radial-gradient(circle, rgba(37, 99, 235, 0.03) 0%, transparent 70%)',
+                bottom: '-50px',
+                left: '-50px',
+            }} />
+
             <Card
                 style={{
-                    width: 400,
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                    borderRadius: 16,
+                    width: 480,
+                    boxShadow: '0 40px 80px -12px rgba(30, 64, 175, 0.15)',
+                    borderRadius: 32,
+                    border: '1px solid #E0F2FE',
+                    background: 'rgba(255, 255, 255, 0.85)',
+                    backdropFilter: 'blur(20px)',
+                    padding: '24px 16px'
                 }}
             >
-                <div style={{ textAlign: 'center', marginBottom: 30 }}>
-                    <div style={{ marginBottom: 16 }}>
+                <div style={{ textAlign: 'center', marginBottom: 40 }}>
+                    <div style={{
+                        marginBottom: 32,
+                        display: 'inline-block',
+                        animation: 'float 6s infinite ease-in-out'
+                    }}>
                         <img
                             src="/toeic-test-logo-transparent.png"
                             alt="TOEIC - Test Logo"
                             style={{
-                                maxHeight: '50%',
-                                maxWidth: '50%',
-                                filter: 'drop-shadow(0 4px 12px rgba(37, 99, 235, 0.3))'
+                                width: 200,
+                                height: 'auto',
+                                filter: 'drop-shadow(0 12px 24px rgba(30, 64, 175, 0.12))'
                             }}
                         />
+                        <style>
+                            {`
+                                @keyframes float {
+                                    0% { transform: translateY(0px); }
+                                    50% { transform: translateY(-10px); }
+                                    100% { transform: translateY(0px); }
+                                }
+                            `}
+                        </style>
                     </div>
-                    <Title level={2} style={{ marginBottom: 10, color: '#2563EB' }}>
-                        Hệ thống quản trị
+                    <Title level={2} style={{ marginBottom: 8, color: '#1E3A8A', fontWeight: 800, letterSpacing: '-1px' }}>
+                        HỆ THỐNG QUẢN TRỊ
                     </Title>
-                    <Text type="secondary" style={{ fontSize: 16 }}>
-                        Đăng nhập để truy cập hệ thống
+                    <Text style={{ fontSize: 17, color: '#64748B', fontWeight: 500 }}>
+                        Đăng nhập để tiếp tục quản lý
                     </Text>
                 </div>
 
@@ -80,6 +118,7 @@ export default function Login() {
                     onFinish={onFinish}
                     autoComplete="off"
                     size="large"
+                    layout="vertical"
                 >
                     <Form.Item
                         name="email"
@@ -89,8 +128,9 @@ export default function Login() {
                         ]}
                     >
                         <Input
-                            prefix={<UserOutlined style={{ color: '#2563EB' }} />}
-                            placeholder="Email"
+                            prefix={<UserOutlined style={{ color: '#2563EB', marginRight: 8 }} />}
+                            placeholder="Email quản trị"
+                            style={{ borderRadius: 12, height: 50 }}
                         />
                     </Form.Item>
 
@@ -99,12 +139,13 @@ export default function Login() {
                         rules={[{ required: true, message: 'Vui lòng nhập mật khẩu!' }]}
                     >
                         <Input.Password
-                            prefix={<LockOutlined style={{ color: '#2563EB' }} />}
+                            prefix={<LockOutlined style={{ color: '#2563EB', marginRight: 8 }} />}
                             placeholder="Mật khẩu"
+                            style={{ borderRadius: 12, height: 50 }}
                         />
                     </Form.Item>
 
-                    <Form.Item>
+                    <Form.Item style={{ marginTop: 8 }}>
                         <Button
                             type="primary"
                             htmlType="submit"
@@ -112,21 +153,21 @@ export default function Login() {
                             loading={loading}
                             icon={<LoginOutlined />}
                             style={{
-                                height: 48,
+                                height: 50,
                                 fontSize: 16,
-                                fontWeight: 600,
-                                // background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', // Removed to let type="primary" take effect w/ new theme
-                                // border: 'none',
+                                fontWeight: 700,
+                                borderRadius: 12,
+                                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
                             }}
                         >
-                            Đăng nhập
+                            Vào hệ thống
                         </Button>
                     </Form.Item>
                 </Form>
 
-                <div style={{ marginTop: 24, textAlign: 'center' }}>
-                    <Text type="secondary" style={{ fontSize: 13 }}>
-                        💡 Chỉ dành cho Admin
+                <div style={{ marginTop: 16, textAlign: 'center' }}>
+                    <Text style={{ fontSize: 13, color: '#94A3B8' }}>
+                        © 2026 TOEIC-TEST - Admin Panel
                     </Text>
                 </div>
             </Card>

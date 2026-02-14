@@ -26,7 +26,7 @@ import {
     UploadOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import api from '../services/api';
+import { testApi, partApi, uploadApi } from '../services/api';
 import InstructionEditor from '../components/InstructionEditor';
 
 const { Option } = Select;
@@ -101,9 +101,9 @@ export default function TestDetail() {
 
     const fetchTest = async () => {
         try {
-            const response = await api.get(`/tests/${testId}`);
-            if (response.data.success) {
-                setTest(response.data.test);
+            const data = await testApi.getDetails(testId!);
+            if (data.success) {
+                setTest(data.test);
             }
         } catch (error) {
             message.error('Không thể tải thông tin đề thi');
@@ -113,9 +113,9 @@ export default function TestDetail() {
     const fetchParts = async () => {
         setLoading(true);
         try {
-            const response = await api.get(`/tests/${testId}/parts`);
-            if (response.data.success) {
-                setParts(response.data.parts || []);
+            const data = await testApi.getParts(testId!);
+            if (data.success) {
+                setParts(data.parts || []);
             }
         } catch (error) {
             message.error('Không thể tải danh sách Parts');
@@ -132,10 +132,10 @@ export default function TestDetail() {
         }
 
         try {
-            // Calculate timeLimit from hours, minutes, and seconds
-            const timeLimit = (values.timeLimitHours || 0) * 3600 + (values.timeLimitMinutes || 0) * 60 + (values.timeLimitSeconds || 0);
+            // Calculate timeLimit (minutes * 60 + seconds)
+            const timeLimit = (values.timeLimitMinutes || 0) * 60 + (values.timeLimitSeconds || 0);
 
-            const response = await api.post(`/tests/${testId}/parts`, {
+            const data = await partApi.create(testId!, {
                 ...values,
                 timeLimit,
                 instructions: createInstructions,
@@ -147,14 +147,14 @@ export default function TestDetail() {
             delete (values as any).timeLimitMinutes;
             delete (values as any).timeLimitSeconds;
 
-            if (response.data.success) {
+            if (data.success) {
                 message.success('Tạo Part thành công!');
                 setCreateModalVisible(false);
                 createForm.resetFields();
                 setCreateInstructions('');
                 fetchParts();
             } else {
-                message.error(response.data.message || 'Không thể tạo Part');
+                message.error(data.message || 'Không thể tạo Part');
             }
         } catch (error) {
             message.error('Có lỗi xảy ra khi tạo Part');
@@ -181,8 +181,7 @@ export default function TestDetail() {
             partNumber: part.partNumber,
             partName: part.partName,
             totalQuestions: part.totalQuestions,
-            timeLimitHours: Math.floor((part.timeLimit || 0) / 3600),
-            timeLimitMinutes: Math.floor(((part.timeLimit || 0) % 3600) / 60),
+            timeLimitMinutes: Math.floor((part.timeLimit || 0) / 60),
             timeLimitSeconds: (part.timeLimit || 0) % 60,
             orderIndex: part.orderIndex,
             status: part.status,
@@ -204,11 +203,9 @@ export default function TestDetail() {
 
             // Handle Audio Upload if changed
             if (editPartAudioFileList.length > 0 && editPartAudioFileList[0].originFileObj) {
-                const audioFormData = new FormData();
-                audioFormData.append('audio', editPartAudioFileList[0].originFileObj);
-                const audioRes = await api.post('/upload/audio', audioFormData);
-                if (audioRes.data.success) {
-                    infoAudioUrl = audioRes.data.url;
+                const audioRes = await uploadApi.audio(editPartAudioFileList[0].originFileObj);
+                if (audioRes.success) {
+                    infoAudioUrl = audioRes.url;
                 } else {
                     message.error('Upload audio thất bại');
                     return;
@@ -217,10 +214,10 @@ export default function TestDetail() {
                 infoAudioUrl = undefined; // Removed audio
             }
 
-            // Calculate timeLimit
-            const timeLimit = (values.timeLimitHours || 0) * 3600 + (values.timeLimitMinutes || 0) * 60 + (values.timeLimitSeconds || 0);
+            // Calculate timeLimit (minutes * 60 + seconds)
+            const timeLimit = (values.timeLimitMinutes || 0) * 60 + (values.timeLimitSeconds || 0);
 
-            const response = await api.patch(`/parts/${editingPart.id}`, {
+            const data = await partApi.update(editingPart.id, {
                 ...values,
                 timeLimit,
                 instructions: editInstructions,
@@ -232,7 +229,7 @@ export default function TestDetail() {
             delete (values as any).timeLimitMinutes;
             delete (values as any).timeLimitSeconds;
 
-            if (response.data.success) {
+            if (data.success) {
                 message.success('Cập nhật Part thành công!');
                 setEditModalVisible(false);
                 setEditingPart(null);
@@ -240,7 +237,7 @@ export default function TestDetail() {
                 form.resetFields();
                 fetchParts();
             } else {
-                message.error(response.data.message || 'Không thể cập nhật Part');
+                message.error(data.message || 'Không thể cập nhật Part');
             }
         } catch (error) {
             message.error('Có lỗi xảy ra khi cập nhật Part');
@@ -259,7 +256,7 @@ export default function TestDetail() {
 
         try {
             const promises = selectedPartIds.map(partId =>
-                api.patch(`/parts/${partId}`, { status: 'ACTIVE' })
+                partApi.update(partId, { status: 'ACTIVE' })
             );
 
             await Promise.all(promises);
@@ -279,7 +276,7 @@ export default function TestDetail() {
 
         try {
             const promises = selectedPartIds.map(partId =>
-                api.patch(`/parts/${partId}`, { status: 'INACTIVE' })
+                partApi.update(partId, { status: 'INACTIVE' })
             );
 
             await Promise.all(promises);
@@ -294,8 +291,8 @@ export default function TestDetail() {
     const handleDelete = async (partId: string) => {
         try {
             // First, check how many questions this Part has
-            const questionsResponse = await api.get(`/parts/${partId}/questions`);
-            const questionCount = questionsResponse.data.questions?.length || 0;
+            const data = await partApi.getQuestions(partId);
+            const questionCount = data.questions?.length || 0;
 
             if (questionCount > 0) {
                 // Part has questions - show warning and redirect to question management
@@ -313,13 +310,13 @@ export default function TestDetail() {
                 });
             } else {
                 // No questions - just delete the Part
-                const response = await api.delete(`/parts/${partId}`);
+                const data = await partApi.delete(partId);
 
-                if (response.data.success) {
+                if (data.success) {
                     message.success('Xóa Part thành công!');
                     fetchParts();
                 } else {
-                    message.error(response.data.message || 'Không thể xóa Part');
+                    message.error(data.message || 'Không thể xóa Part');
                 }
             }
         } catch (error) {
@@ -474,13 +471,14 @@ export default function TestDetail() {
         <div style={{ padding: 24 }}>
             {/* Header */}
             <div style={{ marginBottom: 24 }}>
-                <Button
-                    icon={<ArrowLeftOutlined />}
-                    onClick={() => navigate('/exam-bank')}
-                    style={{ marginBottom: 16 }}
-                >
-                    Quay lại
-                </Button>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                    <Button
+                        icon={<ArrowLeftOutlined />}
+                        onClick={() => navigate('/exam-bank')}
+                    >
+                        Quay lại
+                    </Button>
+                </div>
 
                 {test && (
                     <Card>
@@ -629,18 +627,11 @@ export default function TestDetail() {
                     <Form.Item label="Thời gian làm bài" required style={{ marginBottom: 0 }}>
                         <Space align="baseline" style={{ display: 'flex' }}>
                             <Form.Item
-                                name="timeLimitHours"
+                                name="timeLimitMinutes"
                                 rules={[{ type: 'number', min: 0 }]}
                                 initialValue={0}
                             >
-                                <InputNumber min={0} style={{ width: 80 }} addonAfter="giờ" />
-                            </Form.Item>
-                            <Form.Item
-                                name="timeLimitMinutes"
-                                rules={[{ type: 'number', min: 0, max: 59 }]}
-                                initialValue={0}
-                            >
-                                <InputNumber min={0} max={59} style={{ width: 80 }} addonAfter="phút" />
+                                <InputNumber min={0} style={{ width: 80 }} addonAfter="phút" />
                             </Form.Item>
                             <Form.Item
                                 name="timeLimitSeconds"
@@ -719,16 +710,10 @@ export default function TestDetail() {
                     <Form.Item label="Thời gian làm bài" required style={{ marginBottom: 0 }}>
                         <Space align="baseline" style={{ display: 'flex' }}>
                             <Form.Item
-                                name="timeLimitHours"
+                                name="timeLimitMinutes"
                                 rules={[{ type: 'number', min: 0 }]}
                             >
-                                <InputNumber min={0} style={{ width: 80 }} addonAfter="giờ" />
-                            </Form.Item>
-                            <Form.Item
-                                name="timeLimitMinutes"
-                                rules={[{ type: 'number', min: 0, max: 59 }]}
-                            >
-                                <InputNumber min={0} max={59} style={{ width: 80 }} addonAfter="phút" />
+                                <InputNumber min={0} style={{ width: 80 }} addonAfter="phút" />
                             </Form.Item>
                             <Form.Item
                                 name="timeLimitSeconds"

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, message, Upload, Button, InputNumber, Alert } from 'antd';
 import { UploadOutlined, SoundOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
-import api, { uploadAudio } from '../services/api';
+import api, { uploadApi } from '../services/api';
 
 const { Option } = Select;
 
@@ -71,7 +71,7 @@ export default function CreatePart2Modal({ open, onCancel, onSuccess, partId, cu
             // If user uploaded a specific audio, use it (override)
             if (audioFileList.length > 0) {
                 const actualFile = (audioFileList[0] as any)?.originFileObj || audioFileList[0];
-                const audioRes = await uploadAudio(actualFile);
+                const audioRes = await uploadApi.audio(actualFile);
 
                 if (!audioRes.success) {
                     throw new Error(audioRes.message || 'Upload âm thanh thất bại');

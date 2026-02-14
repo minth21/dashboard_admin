@@ -44,8 +44,9 @@ import CreatePart1Modal from '../components/CreatePart1Modal';
 import EditPart1Modal from '../components/EditPart1Modal';
 import CreatePart2BulkModal from '../components/CreatePart2BulkModal'; // Changed from CreatePart2Modal
 import CreatePart3Modal from '../components/CreatePart3Modal';
+import CreatePart5BulkModal from '../components/CreatePart5BulkModal';
 import AudioPlayer from '../components/AudioPlayer';
-import api from '../services/api';
+import { uploadApi, partApi, questionApi, aiApi } from '../services/api';
 
 // --- Interfaces ---
 interface Question {
@@ -93,6 +94,9 @@ export default function PartDetail() {
     const [editPart1ModalVisible, setEditPart1ModalVisible] = useState(false);
     const [createPart2ModalVisible, setCreatePart2ModalVisible] = useState(false); // Now for bulk modal
     const [createPart3ModalVisible, setCreatePart3ModalVisible] = useState(false);
+    const [createPart5BulkModalVisible, setCreatePart5BulkModalVisible] = useState(false);
+    const [part5ImportData, setPart5ImportData] = useState<any[]>([]);
+    const [part5ImportMode, setPart5ImportMode] = useState<'new' | 'append' | 'replace'>('new'); // Track import mode
 
     // Passage Edit State
     const [editPassageModalVisible, setEditPassageModalVisible] = useState(false);
@@ -111,7 +115,6 @@ export default function PartDetail() {
 
     // --- Import States ---
     const [importDrawerVisible, setImportDrawerVisible] = useState(false);
-    const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
 
     // --- Quill Configuration ---
     const quillModules = {
@@ -143,9 +146,9 @@ export default function PartDetail() {
     // --- API Fetching ---
     const fetchPartDetails = async () => {
         try {
-            const response = await api.get(`/parts/${partId}`);
-            if (response.data.success) {
-                setPart(response.data.part);
+            const data = await partApi.getDetails(partId!);
+            if (data.success) {
+                setPart(data.part);
             }
         } catch (error) {
             console.error('Error fetching part:', error);
@@ -156,9 +159,9 @@ export default function PartDetail() {
     const fetchQuestions = async () => {
         try {
             setLoading(true);
-            const response = await api.get(`/parts/${partId}/questions`);
-            if (response.data.success) {
-                setQuestions(response.data.questions);
+            const data = await partApi.getQuestions(partId!);
+            if (data.success) {
+                setQuestions(data.questions);
             }
         } catch (error) {
             message.error('Không thể tải danh sách câu hỏi');
@@ -167,18 +170,63 @@ export default function PartDetail() {
         }
     };
 
+    const handleGenerateQuestionAI = async (form: any) => {
+        try {
+            const values = form.getFieldsValue();
+            if (!values.questionText || !values.correctAnswer) {
+                message.warning('Vui lòng nhập nội dung câu hỏi và chọn đáp án đúng trước khi tạo lời giải AI');
+                return;
+            }
+
+            message.loading({ content: 'Đang tạo lời giải AI...', key: 'genAI' });
+
+            const cleanText = values.questionText.replace(/<[^>]*>?/gm, '');
+
+            const response = await aiApi.generateExplanation({
+                questionText: cleanText,
+                options: {
+                    A: values.optionA || '',
+                    B: values.optionB || '',
+                    C: values.optionC || '',
+                    D: values.optionD || ''
+                },
+                correctAnswer: values.correctAnswer
+            });
+
+            if (response.success) {
+                form.setFieldsValue({
+                    explanation: response.explanation
+                });
+                message.success({ content: 'Đã tạo lời giải thành công!', key: 'genAI' });
+            } else {
+                message.error({ content: 'Không thể tạo lời giải', key: 'genAI' });
+            }
+        } catch (error) {
+            console.error(error);
+            message.error({ content: 'Lỗi khi gọi AI', key: 'genAI' });
+        }
+    };
+
     // --- Handlers: Create ---
     const handleCreateQuestion = async (values: any) => {
         if (!partId) return;
+
+        // Check for duplicate question number
+        const isDuplicate = questions.some(q => q.questionNumber === values.questionNumber);
+        if (isDuplicate) {
+            message.error(`Câu số ${values.questionNumber} đã tồn tại! Vui lòng chọn số câu khác.`);
+            return;
+        }
+
         try {
-            const response = await api.post(`/parts/${partId}/questions`, values);
-            if (response.data.success) {
+            const data = await questionApi.create(partId, values);
+            if (data.success) {
                 message.success('Tạo câu hỏi thành công');
                 setCreateModalVisible(false);
                 createForm.resetFields();
                 fetchQuestions();
             } else {
-                message.error(response.data.message || 'Tạo câu hỏi thất bại');
+                message.error(data.message || 'Tạo câu hỏi thất bại');
             }
         } catch (error) {
             console.error('Create error:', error);
@@ -191,14 +239,14 @@ export default function PartDetail() {
         if (!editingQuestion) return;
         try {
             // Normal Update (passage is handled separately now)
-            const response = await api.patch(`/questions/${editingQuestion.id}`, values);
-            if (response.data.success) {
+            const data = await questionApi.update(editingQuestion.id, values);
+            if (data.success) {
                 message.success('Cập nhật câu hỏi thành công');
-                setQuestions(prev => prev.map(q => q.id === editingQuestion.id ? response.data.question : q));
+                setQuestions(prev => prev.map(q => q.id === editingQuestion.id ? data.question : q));
                 setEditModalVisible(false);
                 fetchQuestions();
             } else {
-                message.error(response.data.message || 'Cập nhật thất bại');
+                message.error(data.message || 'Cập nhật thất bại');
             }
         } catch (error) {
             console.error('Update error:', error);
@@ -228,13 +276,9 @@ export default function PartDetail() {
                             // New file to upload
                             const fileToUpload = file.originFileObj || (file as any);
                             if (fileToUpload) {
-                                const formData = new FormData();
-                                formData.append('image', fileToUpload);
-                                const res = await api.post('/upload/image', formData, {
-                                    headers: { 'Content-Type': undefined }
-                                });
-                                if (res.data.success) {
-                                    uploadedUrls.push(res.data.url);
+                                const res = await uploadApi.image(fileToUpload);
+                                if (res.success) {
+                                    uploadedUrls.push(res.url);
                                 } else {
                                     throw new Error('Failed to upload image during update');
                                 }
@@ -265,7 +309,7 @@ export default function PartDetail() {
 
             // Update all questions in the group
             await Promise.all(currentPassageQuestions.map(q =>
-                api.patch(`/questions/${q.id}`, { passage: passageContent })
+                questionApi.update(q.id, { passage: passageContent })
             ));
 
             message.success({ content: 'Cập nhật đoạn văn thành công!', key: 'updatePassage' });
@@ -281,9 +325,7 @@ export default function PartDetail() {
 
     const handleDeleteSelected = async () => {
         try {
-            await api.delete('/questions/bulk', {
-                data: { questionIds: selectedQuestionIds }
-            });
+            await questionApi.deleteBulk(selectedQuestionIds);
             message.success(`Đã xóa ${selectedQuestionIds.length} câu hỏi`);
             setSelectedQuestionIds([]);
             fetchQuestions();
@@ -296,7 +338,7 @@ export default function PartDetail() {
     const handleDeleteAll = async () => {
         if (!partId) return;
         try {
-            await api.delete(`/parts/${partId}/questions`);
+            await partApi.deleteAllQuestions(partId);
             message.success('Đã xóa tất cả câu hỏi');
             fetchQuestions();
         } catch (error) {
@@ -314,21 +356,19 @@ export default function PartDetail() {
             formData.append('audio', file);
 
             // 1. Upload to Cloudinary
-            const uploadRes = await api.post('/upload/audio', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            const uploadRes = await uploadApi.audio(file);
 
-            if (uploadRes.data.success) {
-                const audioUrl = uploadRes.data.url;
+            if (uploadRes.success) {
+                const audioUrl = uploadRes.url;
 
                 // 2. Update Part with new Audio URL
-                await api.patch(`/parts/${partId}`, { audioUrl });
+                await partApi.update(partId, { audioUrl });
 
                 message.success({ content: 'Upload audio thành công!', key: 'uploadAudio' });
                 // Update local part state
                 setPart(prev => prev ? { ...prev, audioUrl } : null);
             } else {
-                throw new Error(uploadRes.data.message);
+                throw new Error(uploadRes.message);
             }
         } catch (error: any) {
             console.error('Upload audio error:', error);
@@ -351,12 +391,11 @@ export default function PartDetail() {
             const row: any = {
                 'Số câu': i,
                 'Nội dung câu hỏi': '',
-                'Đáp án A': '',
-                'Đáp án B': '',
-                'Đáp án C': '',
-                'Đáp án D': '',
-                'Đáp án đúng (A/B/C/D)': '',
-                'Giải thích': '' // All parts need explanation
+                'A': '',
+                'B': '',
+                'C': '',
+                'D': '',
+                'Đáp án đúng': ''
             };
 
             // Only add Passage column for Parts 6 & 7
@@ -370,7 +409,7 @@ export default function PartDetail() {
         const worksheet = XLSX.utils.json_to_sheet(rows);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, `Part ${partNum}`);
-        XLSX.writeFile(workbook, `Template_Part_${partNum}.xlsx`);
+        XLSX.writeFile(workbook, `Part_${partNum}.xlsx`);
     };
 
     const handleExcelUpload = async (file: File) => {
@@ -378,19 +417,85 @@ export default function PartDetail() {
 
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('mode', importMode);
+        // Removed importMode - no longer used for Part 5
+
+        // --- PART 5 SPECIAL HANDLING: Client-side parsing for Preview ---
+        if (part?.partNumber === 5) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                // Check existing question count
+                try {
+                    const data = await partApi.getQuestions(partId!);
+                    const existingCount = data.questions?.length || 0;
+                    const importCount = jsonData.length;
+                    const totalAfterImport = existingCount + importCount;
+
+                    // Determine import mode and show appropriate alert
+                    if (existingCount === 0) {
+                        // No existing questions - proceed directly
+                        setPart5ImportMode('new');
+                        setPart5ImportData(jsonData);
+                        setCreatePart5BulkModalVisible(true);
+                        setImportDrawerVisible(false);
+                    } else if (existingCount === 30) {
+                        // Already have 30 questions - ask to overwrite
+                        Modal.confirm({
+                            title: 'Ghi đè câu hỏi?',
+                            content: `Part 5 đã có đủ 30 câu hỏi. Bạn có muốn ghi đè toàn bộ ${existingCount} câu cũ bằng ${importCount} câu mới không?`,
+                            okText: 'Ghi đè',
+                            cancelText: 'Hủy',
+                            okButtonProps: { danger: true },
+                            onOk: () => {
+                                setPart5ImportMode('replace');
+                                setPart5ImportData(jsonData);
+                                setCreatePart5BulkModalVisible(true);
+                                setImportDrawerVisible(false);
+                            }
+                        });
+                    } else if (totalAfterImport > 30) {
+                        // Would exceed 30 questions
+                        Modal.error({
+                            title: 'Không thể import',
+                            content: `Không thể import. Tổng số câu sẽ vượt quá 30 (${existingCount} + ${importCount} = ${totalAfterImport}). Part 5 chỉ được phép có tối đa 30 câu.`,
+                        });
+                    } else {
+                        // Can append - ask for confirmation
+                        Modal.confirm({
+                            title: 'Thêm câu hỏi mới?',
+                            content: `Part 5 hiện có ${existingCount} câu. Bạn có muốn thêm ${importCount} câu mới không? (Tổng: ${totalAfterImport} câu)`,
+                            okText: 'Thêm',
+                            cancelText: 'Hủy',
+                            onOk: () => {
+                                setPart5ImportMode('append');
+                                setPart5ImportData(jsonData);
+                                setCreatePart5BulkModalVisible(true);
+                                setImportDrawerVisible(false);
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error checking existing questions:', error);
+                    message.error('Lỗi khi kiểm tra câu hỏi hiện có');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            return false; // Stop upload
+        }
+
 
         try {
             message.loading({ content: 'Đang import...', key: 'importExcel' });
 
             // Explicitly use api service (axios) for consistency and auth handling
-            // NOTE: api.post handles headers, but for FormData sometimes we might need explicit Content-Type if api doesn't auto-detect. 
-            // Usually axios auto-sets Content-Type to multipart/form-data when data is FormData.
-            const response = await api.post(`/parts/${partId}/questions/import`, formData, {
-                headers: { 'Content-Type': undefined }
-            });
+            const response = await partApi.importQuestions(partId, formData);
 
-            if (response.data.success) {
+            if (response.success) {
                 // User requested to see the count
                 const count = response.data.count || 0;
                 message.success({
@@ -401,11 +506,11 @@ export default function PartDetail() {
                 setImportDrawerVisible(false);
                 fetchQuestions();
             } else {
-                message.error({ content: response.data.message || 'Import thất bại', key: 'importExcel' });
+                message.error({ content: response.message || 'Import thất bại', key: 'importExcel' });
             }
         } catch (error: any) {
             console.error('Import error:', error);
-            message.error({ content: error.response?.data?.message || 'Lỗi kết nối khi import', key: 'importExcel' });
+            message.error({ content: error.message || 'Lỗi kết nối khi import', key: 'importExcel' });
         }
         return false; // Prevent default auto-upload
     };
@@ -868,11 +973,23 @@ export default function PartDetail() {
                 partId={partId || null}
             />
 
+            <CreatePart5BulkModal
+                open={createPart5BulkModalVisible}
+                onCancel={() => setCreatePart5BulkModalVisible(false)}
+                onSuccess={fetchQuestions}
+                initialData={part5ImportData}
+                partId={partId || null}
+                importMode={part5ImportMode}
+            />
+
+
             <Modal
                 title="Thêm câu hỏi mới"
                 open={createModalVisible}
                 onCancel={() => setCreateModalVisible(false)}
                 onOk={() => createForm.submit()}
+                okText="Lưu"
+                cancelText="Hủy"
                 width={600}
             >
                 <Form form={createForm} layout="vertical" onFinish={handleCreateQuestion}>
@@ -923,7 +1040,18 @@ export default function PartDetail() {
                             </Form.Item>
                         ))}
                     </div>
-                    <Form.Item label="Giải thích" name="explanation">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span>Giải thích</span>
+                        <Button
+                            size="small"
+                            type="primary"
+                            ghost
+                            onClick={() => handleGenerateQuestionAI(createForm)}
+                        >
+                            Tạo lời giải AI
+                        </Button>
+                    </div>
+                    <Form.Item name="explanation" noStyle>
                         <ReactQuill theme="snow" modules={quillModules} formats={quillFormats} />
                     </Form.Item>
                 </Form>
@@ -1066,34 +1194,81 @@ export default function PartDetail() {
 
             <Drawer
                 title={`Import Excel - ${part.partName}`}
-                width={500}
+                width={600}
                 open={importDrawerVisible}
                 onClose={() => setImportDrawerVisible(false)}
             >
-                <Space direction="vertical" style={{ width: '100%' }}>
-                    <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate} block>
+                <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                    {/* Download Template Button */}
+                    <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate} block size="large">
                         Tải file mẫu
                     </Button>
-                    <div style={{ margin: '20px 0' }}>
+
+                    {/* Import Instructions */}
+                    <Card
+                        title={<span style={{ fontWeight: 600, color: '#1890ff' }}>HƯỚNG DẪN IMPORT EXCEL</span>}
+                        size="small"
+                        style={{ background: '#f0f5ff', border: '1px solid #adc6ff' }}
+                    >
+                        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                            <div>
+                                <strong>Bước 1:</strong> Tải file mẫu và điền thông tin
+                            </div>
+                            <ul style={{ margin: '8px 0', paddingLeft: 20, color: '#595959' }}>
+                                <li>Số câu: 101-130 (bắt buộc theo format TOEIC)</li>
+                                <li>Nội dung câu hỏi, đáp án A/B/C/D</li>
+                                <li>Đáp án đúng: chỉ điền A, B, C hoặc D</li>
+                                <li><strong>Không cần</strong> điền cột "Lời giải" - AI sẽ tự tạo</li>
+                            </ul>
+
+                            <div>
+                                <strong>Bước 2:</strong> Upload file Excel
+                            </div>
+
+                            <div>
+                                <strong>Bước 3:</strong> Tạo lời giải AI (trong màn hình preview)
+                            </div>
+
+                            <div>
+                                <strong>Bước 4:</strong> Lưu tất cả
+                            </div>
+
+                            <div style={{
+                                marginTop: 12,
+                                padding: '8px 12px',
+                                background: '#fff7e6',
+                                border: '1px solid #ffd591',
+                                borderRadius: 4,
+                                fontSize: 13
+                            }}>
+                                <strong style={{ color: '#fa8c16' }}>⚠️ Lưu ý:</strong> Part 5 chỉ được phép có tối đa 30 câu (101-130)
+                            </div>
+                        </Space>
+                    </Card>
+
+                    {/* Upload Button - Centered at Bottom */}
+                    <div style={{
+                        marginTop: 24,
+                        padding: '20px 0',
+                        borderTop: '1px solid #f0f0f0',
+                        display: 'flex',
+                        justifyContent: 'center'
+                    }}>
                         <Upload
                             accept=".xlsx, .xls"
                             beforeUpload={handleExcelUpload}
                             showUploadList={false}
                         >
-                            <Button icon={<UploadOutlined />} type="primary" block>
+                            <Button
+                                icon={<UploadOutlined />}
+                                type="primary"
+                                size="large"
+                                style={{ minWidth: 200 }}
+                            >
                                 Chọn file Excel
                             </Button>
                         </Upload>
                     </div>
-                    <Select
-                        value={importMode}
-                        onChange={setImportMode}
-                        style={{ width: '100%' }}
-                        options={[
-                            { value: 'append', label: 'Thêm vào (Giữ cũ)' },
-                            { value: 'replace', label: 'Ghi đè (Xóa cũ)' }
-                        ]}
-                    />
                 </Space>
             </Drawer>
 

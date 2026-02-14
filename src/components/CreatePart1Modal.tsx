@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, message, Upload, Button, Image, InputNumber, Row, Col, Card, Space, Divider, Typography, Alert } from 'antd';
 import { InboxOutlined, UploadOutlined, PictureOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
-import api, { uploadImage } from '../services/api';
+import api, { uploadApi } from '../services/api';
 
 const { Option } = Select;
 const { Dragger } = Upload;
@@ -93,7 +93,7 @@ export default function CreatePart1Modal({ open, onCancel, onSuccess, partId }: 
                 throw new Error('File không hợp lệ. Vui lòng thử lại!');
             }
 
-            const imageRes = await uploadImage(actualFile);
+            const imageRes = await uploadApi.image(actualFile);
 
             if (!imageRes.success) {
                 throw new Error(imageRes.message || 'Upload ảnh thất bại');
@@ -252,7 +252,7 @@ export default function CreatePart1Modal({ open, onCancel, onSuccess, partId }: 
                 <div style={{ textAlign: 'right', marginTop: 16, borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
                     <Space>
                         <Button onClick={onCancel} size="large">
-                            Đóng
+                            Hủy
                         </Button>
                         <Button type="primary" htmlType="submit" loading={loading} size="large" icon={<UploadOutlined />}>
                             Lưu câu hỏi

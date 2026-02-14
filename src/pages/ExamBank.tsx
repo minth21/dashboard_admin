@@ -24,7 +24,6 @@ import {
     FileTextOutlined,
     ReloadOutlined,
     BookOutlined,
-    CheckCircleOutlined,
     LockOutlined,
     UnlockOutlined,
     EyeOutlined,
@@ -33,7 +32,7 @@ import type { ColumnsType } from 'antd/es/table';
 
 const { Search } = Input;
 const { Option } = Select;
-import api from '../services/api';
+import { testApi } from '../services/api';
 
 interface Exam {
     id: string;
@@ -76,12 +75,7 @@ export default function ExamBank() {
     const fetchExams = async () => {
         setLoading(true);
         try {
-            const difficultyParam = difficultyFilter !== 'ALL' ? `&difficulty=${difficultyFilter}` : '';
-            const statusParam = statusFilter !== 'ALL' ? `&status=${statusFilter}` : '';
-            const searchParam = searchText ? `&search=${searchText}` : '';
-
-            const response = await api.get(`/tests?page=${page}&limit=${pageSize}${difficultyParam}${statusParam}${searchParam}`);
-            const data = response.data;
+            const data = await testApi.list(page, pageSize, difficultyFilter, statusFilter, searchText);
 
             if (data.success) {
                 setExams(data.tests);
@@ -134,8 +128,7 @@ export default function ExamBank() {
         if (!editingExam) return;
 
         try {
-            const response = await api.patch(`/tests/${editingExam.id}`, values);
-            const data = response.data;
+            const data = await testApi.update(editingExam.id, values);
 
             if (data.success) {
                 message.success('Cập nhật đề thi thành công!');
@@ -166,8 +159,9 @@ export default function ExamBank() {
     // Submit create form
     const handleCreateSubmit = async (values: any) => {
         try {
-            const response = await api.post('/tests', values);
-            const data = response.data;
+            // Force status to LOCKED for new exams
+            const payload = { ...values, status: 'LOCKED' };
+            const data = await testApi.create(payload);
 
             if (data.success) {
                 message.success('Tạo đề thi thành công!');
@@ -192,8 +186,7 @@ export default function ExamBank() {
             cancelText: 'Hủy',
             onOk: async () => {
                 try {
-                    const response = await api.delete(`/tests/${examId}`);
-                    const data = response.data;
+                    const data = await testApi.delete(examId);
 
                     if (data.success) {
                         message.success('Đã xóa đề thi thành công!');
@@ -337,96 +330,112 @@ export default function ExamBank() {
     ];
 
     return (
-        <div style={{ padding: 24 }}>
+        <div style={{ padding: '0 0 40px' }}>
             {/* Statistics Cards */}
-            <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col xs={24} sm={12} md={8}>
-                    <Card>
-                        <Statistic
-                            title="Tổng đề thi"
-                            value={stats.total}
-                            prefix={<BookOutlined style={{ color: '#2563EB' }} />}
-                            valueStyle={{ color: '#2563EB' }}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={24} sm={12} md={8}>
-                    <Card>
-                        <Statistic
-                            title="Đã mở"
-                            value={stats.unlocked}
-                            prefix={<CheckCircleOutlined style={{ color: '#16A34A' }} />}
-                            valueStyle={{ color: '#16A34A' }}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={24} sm={12} md={8}>
-                    <Card>
-                        <Statistic
-                            title="Đang khóa"
-                            value={stats.locked}
-                            prefix={<LockOutlined style={{ color: '#DC2626' }} />}
-                            valueStyle={{ color: '#DC2626' }}
-                        />
-                    </Card>
-                </Col>
+            <Row gutter={24} style={{ marginBottom: 32 }}>
+                {[
+                    { title: 'Tổng đề thi', value: stats.total, icon: <BookOutlined />, color: '#3B82F6', bg: '#EFF6FF' },
+                    { title: 'Đã mở', value: stats.unlocked, icon: <UnlockOutlined />, color: '#10B981', bg: '#ECFDF5' },
+                    { title: 'Đang khóa', value: stats.locked, icon: <LockOutlined />, color: '#EF4444', bg: '#FEF2F2' },
+                ].map((item, index) => (
+                    <Col xs={24} sm={12} md={8} key={index}>
+                        <Card
+                            hoverable
+                            style={{
+                                borderRadius: 20,
+                                border: '1px solid #E0F2FE',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                                <div style={{
+                                    width: 54,
+                                    height: 54,
+                                    borderRadius: 14,
+                                    background: item.bg,
+                                    color: item.color,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 22,
+                                }}>
+                                    {item.icon}
+                                </div>
+                                <Statistic
+                                    title={<span style={{ fontWeight: 700, color: '#64748B', textTransform: 'uppercase', fontSize: 12, letterSpacing: '0.5px' }}>{item.title}</span>}
+                                    value={item.value}
+                                    valueStyle={{ color: '#1E293B', fontWeight: 800, fontSize: 24 }}
+                                />
+                            </div>
+                        </Card>
+                    </Col>
+                ))}
             </Row>
 
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 24 }}>
-                <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={handleOpenCreateModal}
-                    size="large"
-                >
-                    Thêm đề thi mới
-                </Button>
-            </div>
+            {/* Actions & Filters */}
+            <Card
+                style={{
+                    marginBottom: 24,
+                    borderRadius: 16,
+                    border: '1px solid #E0F2FE',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)'
+                }}
+                bodyStyle={{ padding: 20 }}
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                    <Space size="middle" wrap>
+                        <Search
+                            placeholder="Tìm theo tên đề thi"
+                            allowClear
+                            onSearch={handleSearch}
+                            style={{ width: 300 }}
+                            prefix={<SearchOutlined style={{ color: '#64748B' }} />}
+                        />
+                        <Select
+                            value={difficultyFilter}
+                            onChange={(value) => {
+                                setDifficultyFilter(value);
+                                setPage(1);
+                            }}
+                            style={{ width: 160 }}
+                        >
+                            <Option value="ALL">Tất cả độ khó</Option>
+                            <Option value="EASY">Dễ (A1-A2)</Option>
+                            <Option value="MEDIUM">Trung bình (B1-B2)</Option>
+                            <Option value="HARD">Khó (C1)</Option>
+                        </Select>
+                        <Select
+                            value={statusFilter}
+                            onChange={(value) => {
+                                setStatusFilter(value);
+                                setPage(1);
+                            }}
+                            style={{ width: 160 }}
+                        >
+                            <Option value="ALL">Tất cả trạng thái</Option>
+                            <Option value="UNLOCKED">Đang mở bài</Option>
+                            <Option value="LOCKED">Đang khóa bài</Option>
+                        </Select>
+                        <Button
+                            icon={<ReloadOutlined />}
+                            onClick={fetchExams}
+                            loading={loading}
+                        >
+                            Làm mới
+                        </Button>
+                    </Space>
 
-            {/* Filters */}
-            <Space style={{ marginBottom: 16 }} size="middle" wrap>
-                <Search
-                    placeholder="Tìm theo tên đề thi"
-                    allowClear
-                    onSearch={handleSearch}
-                    style={{ width: 300 }}
-                    prefix={<SearchOutlined />}
-                />
-                <Select
-                    value={difficultyFilter}
-                    onChange={(value) => {
-                        setDifficultyFilter(value);
-                        setPage(1);
-                    }}
-                    style={{ width: 150 }}
-                >
-                    <Option value="ALL">Tất cả độ khó</Option>
-                    <Option value="EASY">A1-A2</Option>
-                    <Option value="MEDIUM">B1-B2</Option>
-                    <Option value="HARD">C1</Option>
-                </Select>
-                <Select
-                    value={statusFilter}
-                    onChange={(value) => {
-                        setStatusFilter(value);
-                        setPage(1);
-                    }}
-                    style={{ width: 150 }}
-                >
-                    <Option value="ALL">Tất cả trạng thái</Option>
-                    <Option value="UNLOCKED">Đã mở</Option>
-                    <Option value="LOCKED">Đang khóa</Option>
-                </Select>
-                <Button
-                    icon={<ReloadOutlined />}
-                    onClick={fetchExams}
-                    loading={loading}
-                    title="Làm mới danh sách"
-                >
-                    Làm mới
-                </Button>
-            </Space>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={handleOpenCreateModal}
+                        size="large"
+                        style={{ borderRadius: 12, fontWeight: 700, height: 45 }}
+                    >
+                        Thêm đề thi mới
+                    </Button>
+                </div>
+            </Card>
 
             {/* Table */}
             <Table
@@ -434,6 +443,13 @@ export default function ExamBank() {
                 dataSource={exams}
                 rowKey="id"
                 loading={loading}
+                style={{
+                    background: '#fff',
+                    borderRadius: 16,
+                    overflow: 'hidden',
+                    border: '1px solid #E0F2FE',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)'
+                }}
                 pagination={{
                     current: page,
                     pageSize: pageSize,
@@ -555,7 +571,7 @@ export default function ExamBank() {
                         name="title"
                         rules={[{ required: true, message: 'Vui lòng nhập tên đề thi' }]}
                     >
-                        <Input placeholder="Ví dụ: TOEIC Practice Test 1" />
+                        <Input placeholder="Ví dụ: TOEIC-TEST 1" />
                     </Form.Item>
 
                     <Form.Item
@@ -584,21 +600,6 @@ export default function ExamBank() {
                         </Col>
                         <Col span={12}>
                             <Form.Item
-                                label="Trạng thái"
-                                name="status"
-                                rules={[{ required: true, message: 'Vui lòng chọn trạng thái' }]}
-                            >
-                                <Select>
-                                    <Option value="LOCKED">Khóa</Option>
-                                    <Option value="UNLOCKED">Mở</Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Row gutter={16}>
-                        <Col span={8}>
-                            <Form.Item
                                 label="Thời gian (phút)"
                                 name="duration"
                                 rules={[{ required: true, message: 'Vui lòng nhập thời gian' }]}
@@ -606,7 +607,10 @@ export default function ExamBank() {
                                 <InputNumber min={1} style={{ width: '100%' }} />
                             </Form.Item>
                         </Col>
-                        <Col span={8}>
+                    </Row>
+
+                    <Row gutter={16}>
+                        <Col span={12}>
                             <Form.Item
                                 label="Tổng câu hỏi"
                                 name="totalQuestions"

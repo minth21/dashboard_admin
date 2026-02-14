@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Layout, Menu, Typography, Button, Space, Avatar, message, Upload } from 'antd';
+import { userApi } from '../services/api';
 import {
     LogoutOutlined,
     UserOutlined,
@@ -71,18 +72,8 @@ export default function Dashboard() {
         const formData = new FormData();
         formData.append('avatar', file);
 
-        const token = localStorage.getItem('admin_token');
-
         try {
-            const response = await fetch('http://localhost:3000/api/users/avatar', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: formData,
-            });
-
-            const data = await response.json();
+            const data = await userApi.updateAvatar(formData);
 
             if (data.success && data.user) {
                 // Update user in localStorage and state
@@ -118,7 +109,7 @@ export default function Dashboard() {
     };
 
     return (
-        <Layout style={{ minHeight: '100vh' }}>
+        <Layout style={{ minHeight: '100vh', background: '#F0F9FF' }}>
             {/* Sidebar */}
             <Sider
                 collapsible
@@ -127,31 +118,38 @@ export default function Dashboard() {
                 trigger={null}
                 breakpoint="lg"
                 collapsedWidth="80"
-                width={250}
+                width={260}
                 style={{
                     background: '#FFFFFF',
-                    borderRight: '1px solid #E2E8F0',
+                    borderRight: '1px solid #E0F2FE',
+                    position: 'fixed',
+                    height: '100vh',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    zIndex: 100,
+                    boxShadow: '4px 0 24px rgba(30, 64, 175, 0.02)',
                 }}
             >
                 <div
                     style={{
-                        height: 64,
+                        height: collapsed ? 80 : 120,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        padding: collapsed ? '4px' : '4px 8px',
-                        overflow: 'hidden',
+                        padding: collapsed ? '12px' : '24px',
+                        marginBottom: collapsed ? 20 : 10,
+                        transition: 'all 0.3s'
                     }}
                 >
                     <img
                         src="/toeic-test-logo-transparent.png"
                         alt="TOEIC Test Logo"
                         style={{
-                            maxHeight: collapsed ? '100%' : '200%',
-                            maxWidth: collapsed ? '100%' : '200%',
-                            objectFit: 'contain',
-                            transition: 'all 0.2s',
-                            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
+                            width: collapsed ? '40px' : '180px',
+                            height: 'auto',
+                            filter: 'drop-shadow(0 4px 12px rgba(30, 64, 175, 0.12))',
+                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                         }}
                     />
                 </div>
@@ -160,40 +158,78 @@ export default function Dashboard() {
                     mode="inline"
                     selectedKeys={[selectedMenu]}
                     onClick={({ key }) => handleMenuClick(key)}
-                    style={{ background: 'transparent', border: 'none' }}
+                    style={{
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '0 12px'
+                    }}
                     items={[
                         {
                             key: '1',
-                            icon: <DashboardOutlined />,
-                            label: 'Tổng quan',
-                            style: { fontSize: 16, fontWeight: 'bold' },
+                            icon: <DashboardOutlined style={{ fontSize: 20 }} />,
+                            label: <span style={{ fontWeight: 800 }}>Tổng quan</span>,
+                            style: {
+                                borderRadius: 12,
+                                marginBottom: 12,
+                                height: 54,
+                                display: 'flex',
+                                alignItems: 'center',
+                                fontSize: 15
+                            },
                         },
                         ...(user?.role === 'ADMIN' ? [{
                             key: '2',
-                            icon: <UserOutlined />,
-                            label: 'Quản lý người dùng',
-                            style: { fontSize: 16, fontWeight: 'bold' },
+                            icon: <UserOutlined style={{ fontSize: 20 }} />,
+                            label: <span style={{ fontWeight: 800 }}>Quản lý người dùng</span>,
+                            style: {
+                                borderRadius: 12,
+                                marginBottom: 12,
+                                height: 54,
+                                display: 'flex',
+                                alignItems: 'center',
+                                fontSize: 15
+                            },
                         }] : []),
                         {
                             key: '3',
-                            icon: <HomeOutlined />,
-                            label: 'Ngân hàng đề thi',
-                            style: { fontSize: 16, fontWeight: 'bold' },
+                            icon: <HomeOutlined style={{ fontSize: 20 }} />,
+                            label: <span style={{ fontWeight: 800 }}>Ngân hàng đề thi</span>,
+                            style: {
+                                borderRadius: 12,
+                                marginBottom: 12,
+                                height: 54,
+                                display: 'flex',
+                                alignItems: 'center',
+                                fontSize: 15
+                            },
                         },
                     ]}
                 />
             </Sider>
 
-            <Layout>
-                {/* Header */}
+            <Layout style={{
+                marginLeft: collapsed ? 80 : 260,
+                transition: 'all 0.2s',
+                background: 'transparent'
+            }}>
+                {/* Floating Header */}
+                {/* Floating Header */}
                 <Header
                     style={{
+                        margin: '16px 24px',
                         padding: '0 24px',
-                        background: '#fff',
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        backdropFilter: 'blur(12px)',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                        borderRadius: 20,
+                        border: '1px solid rgba(255, 255, 255, 0.5)',
+                        boxShadow: '0 8px 32px rgba(30, 64, 175, 0.08)',
+                        height: 70,
+                        position: 'sticky',
+                        top: 16,
+                        zIndex: 90,
                     }}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -201,68 +237,85 @@ export default function Dashboard() {
                             type="text"
                             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
                             onClick={() => setCollapsed(!collapsed)}
-                            style={{ fontSize: '16px', width: 40, height: 40 }}
+                            style={{
+                                fontSize: '18px',
+                                width: 45,
+                                height: 45,
+                                borderRadius: 12,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: '#F0F9FF',
+                                color: '#1E40AF'
+                            }}
                         />
-                        <Title level={4} style={{ margin: 0, fontWeight: 'bold' }}>
+                        <Title level={4} style={{ margin: 0, color: '#1E3A8A', fontWeight: 700, letterSpacing: '-0.5px' }}>
                             {getMenuTitle(selectedMenu)}
                         </Title>
                     </div>
 
-                    <Space wrap={false} size="middle" style={{ flexWrap: 'nowrap' }}>
-                        <Upload
-                            beforeUpload={handleAvatarUpload}
-                            showUploadList={false}
-                            accept="image/*"
-                        >
-                            <div style={{ position: 'relative', cursor: 'pointer' }}>
-                                <Avatar
-                                    src={
-                                        user.avatarUrl
-                                            ? user.avatarUrl.startsWith('http')
-                                                ? user.avatarUrl
-                                                : `http://localhost:3000${user.avatarUrl}`
-                                            : '/admin.jpg'
-                                    }
-                                    style={{ flexShrink: 0 }}
-                                    size={40}
-                                    icon={<UserOutlined />}
-                                />
-                                <div
-                                    style={{
-                                        position: 'absolute',
-                                        bottom: 0,
-                                        right: 0,
-                                        background: '#2563EB',
-                                        borderRadius: '50%',
-                                        width: 16,
-                                        height: 16,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        border: '2px solid white',
-                                    }}
-                                >
-                                    <CameraOutlined style={{ fontSize: 8, color: 'white' }} />
+                    <Space size="large">
+                        {/* User Info - Compact Version */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <Upload
+                                beforeUpload={handleAvatarUpload}
+                                showUploadList={false}
+                                accept="image/*"
+                            >
+                                <div style={{ position: 'relative', cursor: 'pointer', display: 'flex' }}>
+                                    <Avatar
+                                        src={
+                                            user.avatarUrl
+                                                ? user.avatarUrl.startsWith('http')
+                                                    ? user.avatarUrl
+                                                    : `http://localhost:3000${user.avatarUrl}`
+                                                : '/admin.jpg'
+                                        }
+                                        size={40}
+                                        style={{ border: '2px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+                                        icon={<UserOutlined />}
+                                    />
+                                    <div
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: 0,
+                                            right: 0,
+                                            background: '#3B82F6',
+                                            borderRadius: '50%',
+                                            width: 14,
+                                            height: 14,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            border: '2px solid white',
+                                        }}
+                                    >
+                                        <CameraOutlined style={{ fontSize: 8, color: 'white' }} />
+                                    </div>
                                 </div>
-                            </div>
-                        </Upload>
-                        <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'flex-start',
-                            minWidth: 0,
-                            flexShrink: 0
-                        }}>
-                            <div style={{ fontWeight: 600, whiteSpace: 'nowrap', lineHeight: '20px' }}>
-                                {user.name}
+                            </Upload>
+                            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                <span style={{ fontWeight: 700, color: '#1E293B', fontSize: 14, lineHeight: '1.2', marginBottom: 2 }}>
+                                    {user.name}
+                                </span>
+                                <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', lineHeight: '1' }}>
+                                    {user.role}
+                                </span>
                             </div>
                         </div>
+
                         <Button
                             type="primary"
-                            danger
                             icon={<LogoutOutlined />}
                             onClick={handleLogout}
-                            style={{ flexShrink: 0 }}
+                            style={{
+                                height: 45,
+                                borderRadius: 12,
+                                fontWeight: 700,
+                                background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+                                border: 'none',
+                                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)'
+                            }}
                         >
                             Đăng xuất
                         </Button>
@@ -270,7 +323,11 @@ export default function Dashboard() {
                 </Header>
 
                 {/* Main Content using Outlet */}
-                <Content style={{ margin: '24px 16px 0' }}>
+                <Content style={{
+                    margin: '8px 24px 24px',
+                    padding: '0',
+                    minHeight: '280px',
+                }}>
                     <Outlet context={{ user }} />
                 </Content>
             </Layout>

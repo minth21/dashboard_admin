@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, message, Upload, Button, Image, InputNumber, Row, Col, Card, Space, Divider, Typography, Alert } from 'antd';
 import { InboxOutlined, UploadOutlined, PictureOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
-import api, { uploadImage } from '../services/api';
+import api, { uploadApi } from '../services/api';
 
 const { Option } = Select;
 const { Dragger } = Upload;
@@ -102,7 +102,7 @@ export default function EditPart1Modal({ open, onCancel, onSuccess, question }: 
                     throw new Error('File không hợp lệ. Vui lòng thử lại!');
                 }
 
-                const imageRes = await uploadImage(actualFile);
+                const imageRes = await uploadApi.image(actualFile);
 
                 if (!imageRes.success) {
                     throw new Error(imageRes.message || 'Upload ảnh thất bại');

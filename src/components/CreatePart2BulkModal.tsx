@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Modal, Select, message, Button, Row, Col, Card, Alert, Input, Upload, Typography } from 'antd';
 import { UploadOutlined, SoundOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
-import api, { uploadAudio } from '../services/api';
+import api, { uploadApi } from '../services/api';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -81,20 +81,7 @@ export default function CreatePart2BulkModal({ open, onCancel, onSuccess, partId
             // 1. Upload Audio if exists
             let newAudioUrl = currentAudioUrl;
             if (audioFile) {
-                const audioFormData = new FormData();
-                audioFormData.append('audio', audioFile);
-
-                // Use fetch for file upload
-                const token = localStorage.getItem('admin_token');
-                const uploadResponse = await fetch('http://localhost:3000/api/upload/audio', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: audioFormData
-                });
-
-                const audioRes = await uploadResponse.json();
+                const audioRes = await uploadApi.audio(audioFile);
 
                 if (audioRes.success) {
                     newAudioUrl = audioRes.url;

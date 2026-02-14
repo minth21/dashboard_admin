@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, message, Upload, Button, Image, Row, Col, Card, Space, Typography, Tabs } from 'antd';
 import { InboxOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
-import api, { uploadImage, uploadAudio } from '../services/api';
+import api, { uploadApi } from '../services/api';
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -117,20 +117,7 @@ export default function CreatePart1BulkModal({ open, onCancel, onSuccess, partId
 
             // 0. Upload Part Audio if Changed
             if (audioFile) {
-                const audioFormData = new FormData();
-                audioFormData.append('audio', audioFile as any);
-
-                // Use fetch for file upload
-                const token = localStorage.getItem('admin_token');
-                const uploadResponse = await fetch('http://localhost:3000/api/upload/audio', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: audioFormData
-                });
-
-                const audioRes = await uploadResponse.json();
+                const audioRes = await uploadApi.audio(audioFile as any);
 
                 if (audioRes.success) {
                     // Update Part with new Audio URL
@@ -149,20 +136,7 @@ export default function CreatePart1BulkModal({ open, onCancel, onSuccess, partId
 
             const createPromises = questions.map(async (q) => {
                 // 1. Upload Image
-                const imageFormData = new FormData();
-                imageFormData.append('image', q.imageFile as any);
-
-                // Use fetch for file upload
-                const token = localStorage.getItem('admin_token');
-                const uploadResponse = await fetch('http://localhost:3000/api/upload/image', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: imageFormData
-                });
-
-                const imageRes = await uploadResponse.json();
+                const imageRes = await uploadApi.image(q.imageFile as any);
 
                 if (!imageRes.success) throw new Error(`Lỗi upload ảnh câu ${q.id}`);
                 const imageUrl = imageRes.url;

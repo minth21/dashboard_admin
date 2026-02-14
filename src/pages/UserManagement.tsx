@@ -11,6 +11,7 @@ import {
     Modal,
     Form,
     message,
+    Card,
 } from 'antd';
 import {
     SearchOutlined,
@@ -23,7 +24,7 @@ import type { ColumnsType } from 'antd/es/table';
 
 const { Search } = Input;
 const { Option } = Select;
-import api from '../services/api';
+import { userApi } from '../services/api';
 
 interface User {
     id: string;
@@ -34,7 +35,7 @@ interface User {
     gender?: 'MALE' | 'FEMALE' | 'OTHER';
     avatarUrl?: string;
     role: 'STUDENT' | 'ADMIN';
-    cefrLevel?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1';
+    progress: number;
     targetScore?: number;
     createdAt: string;
     updatedAt: string;
@@ -58,11 +59,7 @@ export default function UserManagement() {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const roleParam = roleFilter !== 'ALL' ? `&role=${roleFilter}` : '';
-            const searchParam = searchText ? `&search=${searchText}` : '';
-
-            const response = await api.get(`/users?page=${page}&limit=${pageSize}${roleParam}${searchParam}`);
-            const data = response.data;
+            const data = await userApi.list(page, pageSize, roleFilter, searchText);
 
             if (data.success) {
                 setUsers(data.users);
@@ -99,8 +96,7 @@ export default function UserManagement() {
             gender: user.gender,
             avatarUrl: user.avatarUrl,
             role: user.role,
-            cefrLevel: user.cefrLevel,
-            targetScore: user.targetScore,
+            progress: user.progress,
         });
         setEditModalVisible(true);
     };
@@ -110,8 +106,7 @@ export default function UserManagement() {
         if (!editingUser) return;
 
         try {
-            const response = await api.patch(`/users/${editingUser.id}`, values);
-            const data = response.data;
+            const data = await userApi.update(editingUser.id, values);
 
             if (data.success) {
                 message.success('Cập nhật user thành công!');
@@ -126,18 +121,6 @@ export default function UserManagement() {
         }
     };
 
-    // Helper function to get CEFR level name
-    const getCEFRLevelName = (level: string | null): string => {
-        if (!level) return '-';
-        const levelMap: { [key: string]: string } = {
-            'A1': 'A1 - Beginner (120-220)',
-            'A2': 'A2 - Elementary (225-545)',
-            'B1': 'B1 - Intermediate (550-780)',
-            'B2': 'B2 - Upper Intermediate (785-940)',
-            'C1': 'C1 - Advanced (945-990)',
-        };
-        return levelMap[level] || level;
-    };
 
     // Mở modal tạo user
     const handleOpenCreateModal = () => {
@@ -149,8 +132,7 @@ export default function UserManagement() {
     // Submit create form
     const handleCreateSubmit = async (values: any) => {
         try {
-            const response = await api.post('/users', values);
-            const data = response.data;
+            const data = await userApi.create(values);
 
             if (data.success) {
                 message.success('Tạo user thành công!');
@@ -166,7 +148,7 @@ export default function UserManagement() {
     };
 
     // Khóa/Mở khóa tài khoản
-    const handleLockAccount = async (userId: string, userName: string) => {
+    const handleLockAccount = async (_userId: string, userName: string) => {
         try {
             // TODO: Implement lock/unlock API
             message.info(`Chức năng khóa tài khoản "${userName}" sẽ được triển khai sau`);
@@ -246,6 +228,14 @@ export default function UserManagement() {
             },
         },
         {
+            title: 'Ngày sinh',
+            dataIndex: 'dateOfBirth',
+            key: 'dateOfBirth',
+            width: 120,
+            align: 'center' as const,
+            render: (date: string) => date ? new Date(date).toLocaleDateString('vi-VN') : '-',
+        },
+        {
             title: 'Role',
             dataIndex: 'role',
             key: 'role',
@@ -262,20 +252,12 @@ export default function UserManagement() {
             },
         },
         {
-            title: 'CEFR Level',
-            dataIndex: 'cefrLevel',
-            key: 'cefrLevel',
-            width: 200,
-            align: 'center' as const,
-            render: (level: string) => getCEFRLevelName(level),
-        },
-        {
-            title: 'Target Score',
-            dataIndex: 'targetScore',
-            key: 'targetScore',
+            title: 'Tiến độ AI (%)',
+            dataIndex: 'progress',
+            key: 'progress',
             width: 120,
             align: 'center' as const,
-            render: (score: number) => score || '-',
+            render: (progress: number) => <Tag color="blue">{progress}%</Tag>,
         },
         {
             title: 'Ngày tạo',
@@ -310,7 +292,7 @@ export default function UserManagement() {
     ];
 
     return (
-        <div style={{ padding: 24 }}>
+        <div style={{ padding: '0 0 24px' }}>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 24 }}>
                 <Button
@@ -322,36 +304,44 @@ export default function UserManagement() {
                 </Button>
             </div>
 
-            {/* Filters */}
-            <Space style={{ marginBottom: 16 }} size="middle">
-                <Search
-                    placeholder="Tìm theo tên hoặc email"
-                    allowClear
-                    onSearch={handleSearch}
-                    style={{ width: 300 }}
-                    prefix={<SearchOutlined />}
-                />
-                <Select
-                    value={roleFilter}
-                    onChange={(value) => {
-                        setRoleFilter(value);
-                        setPage(1);
-                    }}
-                    style={{ width: 150 }}
-                >
-                    <Option value="ALL">Tất cả</Option>
-                    <Option value="STUDENT">Học viên</Option>
-                    <Option value="ADMIN">Quản trị viên</Option>
-                </Select>
-                <Button
-                    icon={<ReloadOutlined />}
-                    onClick={fetchUsers}
-                    loading={loading}
-                    title="Làm mới danh sách"
-                >
-                    Làm mới
-                </Button>
-            </Space>
+            <Card
+                style={{
+                    marginBottom: 24,
+                    borderRadius: 16,
+                    border: '1px solid #E0F2FE',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)'
+                }}
+                bodyStyle={{ padding: 16 }}
+            >
+                <Space size="middle" wrap>
+                    <Search
+                        placeholder="Tìm theo tên hoặc email"
+                        allowClear
+                        onSearch={handleSearch}
+                        style={{ width: 300 }}
+                        prefix={<SearchOutlined style={{ color: '#64748B' }} />}
+                    />
+                    <Select
+                        value={roleFilter}
+                        onChange={(value) => {
+                            setRoleFilter(value);
+                            setPage(1);
+                        }}
+                        style={{ width: 150 }}
+                    >
+                        <Option value="ALL">Tất cả vai trò</Option>
+                        <Option value="STUDENT">Học viên</Option>
+                        <Option value="ADMIN">Quản trị viên</Option>
+                    </Select>
+                    <Button
+                        icon={<ReloadOutlined />}
+                        onClick={fetchUsers}
+                        loading={loading}
+                    >
+                        Làm mới
+                    </Button>
+                </Space>
+            </Card>
 
             {/* Table */}
             <Table
@@ -359,6 +349,13 @@ export default function UserManagement() {
                 dataSource={users}
                 rowKey="id"
                 loading={loading}
+                style={{
+                    background: '#fff',
+                    borderRadius: 16,
+                    overflow: 'hidden',
+                    border: '1px solid #E0F2FE',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)'
+                }}
                 pagination={{
                     current: page,
                     pageSize: pageSize,
@@ -370,7 +367,7 @@ export default function UserManagement() {
                         setPageSize(pageSize);
                     },
                 }}
-                scroll={{ x: 1000 }}
+                scroll={{ x: 'max-content' }}
             />
 
             {/* Edit Modal */}
@@ -447,7 +444,7 @@ export default function UserManagement() {
 
                             return (
                                 <>
-                                    <Form.Item label="CEFR Level" name="cefrLevel">
+                                    <Form.Item label="Tiến độ (%)" name="progress">
                                         <Select allowClear placeholder="Chọn mức độ">
                                             <Option value="A1">A1 - Beginner (120-220)</Option>
                                             <Option value="A2">A2 - Elementary (225-545)</Option>
@@ -544,18 +541,8 @@ export default function UserManagement() {
 
                             return (
                                 <>
-                                    <Form.Item label="CEFR Level" name="cefrLevel">
-                                        <Select allowClear placeholder="Chọn mức độ">
-                                            <Option value="A1">A1 - Beginner (120-220)</Option>
-                                            <Option value="A2">A2 - Elementary (225-545)</Option>
-                                            <Option value="B1">B1 - Intermediate (550-780)</Option>
-                                            <Option value="B2">B2 - Upper Intermediate (785-940)</Option>
-                                            <Option value="C1">C1 - Advanced (945-990)</Option>
-                                        </Select>
-                                    </Form.Item>
-
-                                    <Form.Item label="Target Score" name="targetScore">
-                                        <InputNumber min={0} max={990} style={{ width: '100%' }} />
+                                    <Form.Item label="Tiến độ AI (%)" name="progress">
+                                        <InputNumber min={0} max={100} style={{ width: '100%' }} />
                                     </Form.Item>
                                 </>
                             );
