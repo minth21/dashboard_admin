@@ -14,6 +14,7 @@ const { Title, Text } = Typography;
 interface User {
     name: string;
     email: string;
+    role: string;
 }
 
 export default function Overview() {
@@ -22,6 +23,12 @@ export default function Overview() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // Only fetch stats if user is ADMIN
+        if (user.role !== 'ADMIN') {
+            setLoading(false);
+            return;
+        }
+
         const fetchStats = async () => {
             try {
                 const response = await dashboardApi.getStats();
@@ -30,14 +37,18 @@ export default function Overview() {
                 }
             } catch (error) {
                 console.error('Failed to fetch dashboard stats:', error);
-                message.error('Không thể tải số liệu thống kê');
+                // Silent error for non-admins to avoid confusion, 
+                // but user.role check above already handles most cases.
+                if (user.role === 'ADMIN') {
+                    message.error('Không thể tải số liệu thống kê');
+                }
             } finally {
                 setLoading(false);
             }
         };
 
         fetchStats();
-    }, []);
+    }, [user.role]);
 
     if (!user) return null;
 
@@ -69,9 +80,10 @@ export default function Overview() {
                                 hoverable
                                 style={{
                                     border: 'none',
-                                    borderRadius: 16,
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
-                                    transition: 'all 0.3s ease'
+                                    borderRadius: 24,
+                                    boxShadow: '0 10px 30px -5px rgba(37, 99, 235, 0.08), 0 4px 10px -6px rgba(37, 99, 235, 0.04)',
+                                    transition: 'all 0.3s ease',
+                                    background: 'linear-gradient(135deg, #FFFFFF 0%, #FAFCFF 100%)',
                                 }}
                             >
                                 <Space size={20} align="center" style={{ width: '100%', justifyContent: 'space-between' }}>

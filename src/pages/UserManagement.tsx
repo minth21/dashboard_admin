@@ -12,6 +12,8 @@ import {
     Form,
     message,
     Card,
+    Row,
+    Col,
 } from 'antd';
 import {
     SearchOutlined,
@@ -19,6 +21,13 @@ import {
     UserOutlined,
     LockOutlined,
     ReloadOutlined,
+    PlusOutlined,
+    BookOutlined,
+    MailOutlined,
+    PhoneOutlined,
+    SafetyCertificateOutlined,
+    IdcardOutlined,
+    PlusCircleOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -34,7 +43,7 @@ interface User {
     dateOfBirth?: string;
     gender?: 'MALE' | 'FEMALE' | 'OTHER';
     avatarUrl?: string;
-    role: 'STUDENT' | 'ADMIN';
+    role: 'STUDENT' | 'ADMIN' | 'SPECIALIST';
     progress: number;
     targetScore?: number;
     createdAt: string;
@@ -55,6 +64,16 @@ export default function UserManagement() {
     const [form] = Form.useForm();
     const [createForm] = Form.useForm();
 
+    // Statistics
+    const [stats, setStats] = useState({
+        total: 0,
+        students: 0,
+        staff: 0,
+    });
+
+    // Cấu hình bóng đổ hiện đại
+    const modernShadow = '0 10px 30px -5px rgba(37, 99, 235, 0.08), 0 4px 10px -6px rgba(37, 99, 235, 0.04)';
+
     // Fetch users từ API
     const fetchUsers = async () => {
         setLoading(true);
@@ -64,6 +83,12 @@ export default function UserManagement() {
             if (data.success) {
                 setUsers(data.users);
                 setTotal(data.pagination.total);
+
+                setStats({
+                    total: data.pagination.total,
+                    students: data.users.filter((u: User) => u.role === 'STUDENT').length,
+                    staff: data.users.filter((u: User) => u.role !== 'STUDENT').length,
+                });
             } else {
                 message.error('Không thể tải danh sách người dùng');
             }
@@ -244,11 +269,11 @@ export default function UserManagement() {
             render: (role: string) => {
                 const roleConfig: { [key: string]: { color: string; label: string } } = {
                     ADMIN: { color: '#2563EB', label: 'Quản trị viên' },
-                    STAFF: { color: '#F59E0B', label: 'Nhân viên' },
-                    STUDENT: { color: '#16A34A', label: 'Học viên' },
+                    SPECIALIST: { color: '#8B5CF6', label: 'Chuyên viên' },
+                    STUDENT: { color: '#10B981', label: 'Học viên' },
                 };
                 const config = roleConfig[role] || { color: 'default', label: role };
-                return <Tag color={config.color}>{config.label}</Tag>;
+                return <Tag color={config.color} style={{ borderRadius: 6, fontWeight: 600, border: 'none', padding: '2px 10px' }}>{config.label}</Tag>;
             },
         },
         {
@@ -275,15 +300,16 @@ export default function UserManagement() {
             render: (_, record) => (
                 <Space>
                     <Button
-                        type="primary"
+                        type="text"
+                        style={{ color: '#059669', background: '#D1FAE5', borderRadius: '8px' }}
                         icon={<EditOutlined />}
-                        size="small"
                         onClick={() => handleEdit(record)}
                     />
                     <Button
+                        type="text"
                         danger
+                        style={{ background: '#FEE2E2', borderRadius: '8px' }}
                         icon={<LockOutlined />}
-                        size="small"
                         onClick={() => handleLockAccount(record.id, record.name)}
                     />
                 </Space>
@@ -292,132 +318,211 @@ export default function UserManagement() {
     ];
 
     return (
-        <div style={{ padding: '0 0 24px' }}>
+        <div style={{ padding: '24px', background: '#F8FAFC', minHeight: '100vh' }}>
+            
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 24 }}>
-                <Button
-                    type="primary"
-                    icon={<UserOutlined />}
-                    onClick={handleOpenCreateModal}
-                >
-                    Thêm người dùng
-                </Button>
+            <div style={{ marginBottom: 32 }}>
+                <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#1E293B' }}>Quản lý người dùng</h1>
+                <p style={{ margin: 0, color: '#64748B', fontSize: 15 }}>Theo dõi và quản lý tài khoản người dùng trên hệ thống.</p>
             </div>
 
+            {/* Statistics Cards */}
+            <Row gutter={24} style={{ marginBottom: 32 }}>
+                {[
+                    { title: 'Tổng người dùng', value: stats.total, icon: <UserOutlined />, color: '#1D4ED8', bg: 'linear-gradient(135deg, #DBEAFE 0%, #EFF6FF 100%)' },
+                    { title: 'Học viên', value: stats.students, icon: <BookOutlined />, color: '#047857', bg: 'linear-gradient(135deg, #D1FAE5 0%, #ECFDF5 100%)' },
+                    { title: 'Đội ngũ quản trị', value: stats.staff, icon: <LockOutlined />, color: '#B91C1C', bg: 'linear-gradient(135deg, #FEE2E2 0%, #FEF2F2 100%)' },
+                ].map((item, index) => (
+                    <Col xs={24} sm={12} md={8} key={index}>
+                        <Card
+                            hoverable
+                            style={{
+                                borderRadius: 24,
+                                border: 'none',
+                                background: '#FFFFFF',
+                                boxShadow: modernShadow,
+                                transition: 'all 0.3s ease'
+                            }}
+                            bodyStyle={{ padding: '24px' }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                                <div style={{
+                                    width: 64,
+                                    height: 64,
+                                    borderRadius: 18,
+                                    background: item.bg,
+                                    color: item.color,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 28,
+                                    boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.5)'
+                                }}>
+                                    {item.icon}
+                                </div>
+                                <div>
+                                    <div style={{ fontWeight: 700, color: '#64748B', textTransform: 'uppercase', fontSize: 13, letterSpacing: '0.5px', marginBottom: 4 }}>
+                                        {item.title}
+                                    </div>
+                                    <div style={{ color: '#0F172A', fontWeight: 800, fontSize: 32, lineHeight: 1 }}>
+                                        {item.value}
+                                    </div>
+                                </div>
+                            </div>
+                        </Card>
+                    </Col>
+                ))}
+            </Row>
+
+            {/* Actions & Filters */}
             <Card
                 style={{
                     marginBottom: 24,
-                    borderRadius: 16,
-                    border: '1px solid #E0F2FE',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)'
+                    borderRadius: 20,
+                    border: 'none',
+                    background: '#FFFFFF',
+                    boxShadow: modernShadow
                 }}
-                bodyStyle={{ padding: 16 }}
+                bodyStyle={{ padding: '20px 24px' }}
             >
-                <Space size="middle" wrap>
-                    <Search
-                        placeholder="Tìm theo tên hoặc email"
-                        allowClear
-                        onSearch={handleSearch}
-                        style={{ width: 300 }}
-                        prefix={<SearchOutlined style={{ color: '#64748B' }} />}
-                    />
-                    <Select
-                        value={roleFilter}
-                        onChange={(value) => {
-                            setRoleFilter(value);
-                            setPage(1);
-                        }}
-                        style={{ width: 150 }}
-                    >
-                        <Option value="ALL">Tất cả vai trò</Option>
-                        <Option value="STUDENT">Học viên</Option>
-                        <Option value="ADMIN">Quản trị viên</Option>
-                    </Select>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                    <Space size="middle" wrap>
+                        <Search
+                            placeholder="Tìm theo tên hoặc email"
+                            allowClear
+                            onSearch={handleSearch}
+                            style={{ width: 320 }}
+                            size="large"
+                            prefix={<SearchOutlined style={{ color: '#94A3B8' }} />}
+                        />
+                        <Select
+                            size="large"
+                            value={roleFilter}
+                            onChange={(value) => {
+                                setRoleFilter(value);
+                                setPage(1);
+                            }}
+                            style={{ width: 180 }}
+                        >
+                            <Option value="ALL">Tất cả vai trò</Option>
+                            <Option value="ADMIN">Quản trị viên</Option>
+                            <Option value="SPECIALIST">Chuyên viên</Option>
+                            <Option value="STUDENT">Học viên</Option>
+                        </Select>
+                        <Button
+                            size="large"
+                            icon={<ReloadOutlined />}
+                            onClick={fetchUsers}
+                            loading={loading}
+                            style={{ borderRadius: '10px', color: '#475569', fontWeight: 600 }}
+                        >
+                            Làm mới
+                        </Button>
+                    </Space>
+
                     <Button
-                        icon={<ReloadOutlined />}
-                        onClick={fetchUsers}
-                        loading={loading}
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={handleOpenCreateModal}
+                        size="large"
+                        style={{
+                            borderRadius: 12,
+                            fontWeight: 700,
+                            height: 48,
+                            padding: '0 24px',
+                            background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                            border: 'none',
+                            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                        }}
                     >
-                        Làm mới
+                        Thêm người dùng mới
                     </Button>
-                </Space>
+                </div>
             </Card>
 
             {/* Table */}
-            <Table
-                columns={columns}
-                dataSource={users}
-                rowKey="id"
-                loading={loading}
+            <Card
                 style={{
-                    background: '#fff',
-                    borderRadius: 16,
-                    overflow: 'hidden',
-                    border: '1px solid #E0F2FE',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)'
+                    borderRadius: 20,
+                    border: 'none',
+                    boxShadow: modernShadow,
+                    overflow: 'hidden'
                 }}
-                pagination={{
-                    current: page,
-                    pageSize: pageSize,
-                    total: total,
-                    showSizeChanger: true,
-                    showTotal: (total) => `Tổng ${total} người dùng`,
-                    onChange: (page, pageSize) => {
-                        setPage(page);
-                        setPageSize(pageSize);
-                    },
-                }}
-                scroll={{ x: 'max-content' }}
-            />
+                bodyStyle={{ padding: 0 }}
+            >
+                <Table
+                    columns={columns}
+                    dataSource={users}
+                    rowKey="id"
+                    loading={loading}
+                    pagination={{
+                        current: page,
+                        pageSize: pageSize,
+                        total: total,
+                        showSizeChanger: true,
+                        showTotal: (total) => <span style={{ fontWeight: 600 }}>Tổng {total} người dùng</span>,
+                        onChange: (page, pageSize) => {
+                            setPage(page);
+                            setPageSize(pageSize);
+                        },
+                        style: { padding: '16px 24px', margin: 0 }
+                    }}
+                    scroll={{ x: 'max-content' }}
+                />
+            </Card>
 
             {/* Edit Modal */}
             <Modal
-                title="Chỉnh Sửa User"
+                title={<div style={{ fontSize: 20, color: '#1E293B', fontWeight: 700 }}>Chỉnh sửa người dùng</div>}
                 open={editModalVisible}
                 onCancel={() => setEditModalVisible(false)}
                 onOk={() => form.submit()}
-                okText="Lưu"
+                okText="Lưu thay đổi"
                 cancelText="Hủy"
-                width={600}
+                width={700}
+                centered
+                okButtonProps={{ style: { borderRadius: 8, background: '#2563EB' } }}
+                cancelButtonProps={{ style: { borderRadius: 8 } }}
             >
                 <Form
                     form={form}
                     layout="vertical"
                     onFinish={handleEditSubmit}
+                    style={{ marginTop: 24 }}
                 >
                     <Form.Item
-                        label="Tên"
+                        label={<span style={{ fontWeight: 600 }}>Tên</span>}
                         name="name"
                         rules={[{ required: true, message: 'Vui lòng nhập tên' }]}
                     >
-                        <Input />
+                        <Input size="large" style={{ borderRadius: 8 }} />
                     </Form.Item>
 
                     <Form.Item
-                        label="Email"
+                        label={<span style={{ fontWeight: 600 }}>Email</span>}
                         name="email"
                         rules={[
                             { required: true, message: 'Vui lòng nhập email' },
                             { type: 'email', message: 'Email không hợp lệ' },
                         ]}
                     >
-                        <Input />
+                        <Input size="large" style={{ borderRadius: 8 }} />
                     </Form.Item>
 
-                    <Form.Item label="Số điện thoại" name="phoneNumber">
-                        <Input />
+                    <Form.Item label={<span style={{ fontWeight: 600 }}>Số điện thoại</span>} name="phoneNumber">
+                        <Input size="large" style={{ borderRadius: 8 }} />
                     </Form.Item>
 
                     <Form.Item
-                        label="Avatar URL"
+                        label={<span style={{ fontWeight: 600 }}>Avatar URL</span>}
                         name="avatarUrl"
                         help="Nhập URL ảnh đại diện (Cloudinary hoặc URL khác)"
                     >
-                        <Input placeholder="https://res.cloudinary.com/..." />
+                        <Input size="large" style={{ borderRadius: 8 }} placeholder="https://res.cloudinary.com/..." />
                     </Form.Item>
 
-                    <Form.Item label="Giới tính" name="gender">
-                        <Select allowClear placeholder="Chọn giới tính">
+                    <Form.Item label={<span style={{ fontWeight: 600 }}>Giới tính</span>} name="gender">
+                        <Select size="large" style={{ borderRadius: 8 }} allowClear placeholder="Chọn giới tính">
                             <Option value="MALE">Nam</Option>
                             <Option value="FEMALE">Nữ</Option>
                             <Option value="OTHER">Khác</Option>
@@ -425,14 +530,14 @@ export default function UserManagement() {
                     </Form.Item>
 
                     <Form.Item
-                        label="Role"
+                        label={<span style={{ fontWeight: 600 }}>Role</span>}
                         name="role"
                         rules={[{ required: true, message: 'Vui lòng chọn role' }]}
                     >
-                        <Select>
-                            <Option value="STUDENT">Học viên</Option>
-                            <Option value="STAFF">Nhân viên</Option>
+                        <Select size="large" style={{ borderRadius: 8 }}>
                             <Option value="ADMIN">Quản trị viên</Option>
+                            <Option value="SPECIALIST">Chuyên viên</Option>
+                            <Option value="STUDENT">Học viên</Option>
                         </Select>
                     </Form.Item>
 
@@ -444,8 +549,8 @@ export default function UserManagement() {
 
                             return (
                                 <>
-                                    <Form.Item label="Tiến độ (%)" name="progress">
-                                        <Select allowClear placeholder="Chọn mức độ">
+                                    <Form.Item label={<span style={{ fontWeight: 600 }}>Tiến độ (%)</span>} name="progress">
+                                        <Select size="large" style={{ borderRadius: 8 }} allowClear placeholder="Chọn mức độ">
                                             <Option value="A1">A1 - Beginner (120-220)</Option>
                                             <Option value="A2">A2 - Elementary (225-545)</Option>
                                             <Option value="B1">B1 - Intermediate (550-780)</Option>
@@ -454,8 +559,8 @@ export default function UserManagement() {
                                         </Select>
                                     </Form.Item>
 
-                                    <Form.Item label="Target Score" name="targetScore">
-                                        <InputNumber min={0} max={990} style={{ width: '100%' }} />
+                                    <Form.Item label={<span style={{ fontWeight: 600 }}>Target Score</span>} name="targetScore">
+                                        <InputNumber size="large" min={0} max={990} style={{ width: '100%', borderRadius: 8 }} />
                                     </Form.Item>
                                 </>
                             );
@@ -466,88 +571,155 @@ export default function UserManagement() {
 
             {/* Create User Modal */}
             <Modal
-                title="Tạo Người Dùng Mới"
+                title={
+                    <Space style={{ marginBottom: 8 }}>
+                        <div style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 18,
+                            boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
+                        }}>
+                            <PlusCircleOutlined />
+                        </div>
+                        <span style={{ fontSize: 20, color: '#1E293B', fontWeight: 800 }}>Thêm người dùng mới</span>
+                    </Space>
+                }
                 open={createModalVisible}
                 onCancel={() => setCreateModalVisible(false)}
                 onOk={() => createForm.submit()}
-                okText="Tạo"
+                okText="Tạo tài khoản"
                 cancelText="Hủy"
-                width={600}
+                width={850}
+                centered
+                okButtonProps={{
+                    style: {
+                        borderRadius: 10,
+                        background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                        border: 'none',
+                        height: 40,
+                        padding: '0 24px',
+                        fontWeight: 600,
+                        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                    }
+                }}
+                cancelButtonProps={{ style: { borderRadius: 10, height: 40 } }}
             >
                 <Form
                     form={createForm}
                     layout="vertical"
                     onFinish={handleCreateSubmit}
+                    style={{ marginTop: 24 }}
                 >
-                    <Form.Item
-                        label="Tên"
-                        name="name"
-                        rules={[{ required: true, message: 'Vui lòng nhập tên' }]}
-                    >
-                        <Input />
-                    </Form.Item>
+                    <Row gutter={24}>
+                        <Col span={12}>
+                            <Form.Item
+                                label={<span style={{ fontWeight: 600, color: '#475569' }}>Tên người dùng</span>}
+                                name="name"
+                                rules={[{ required: true, message: 'Vui lòng nhập tên' }]}
+                            >
+                                <Input
+                                    size="large"
+                                    placeholder="Nguyễn Văn A"
+                                    prefix={<UserOutlined style={{ color: '#94A3B8' }} />}
+                                    style={{ borderRadius: 10 }}
+                                />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                label={<span style={{ fontWeight: 600, color: '#475569' }}>Địa chỉ Email</span>}
+                                name="email"
+                                rules={[
+                                    { required: true, message: 'Vui lòng nhập email' },
+                                    { type: 'email', message: 'Email không hợp lệ' },
+                                ]}
+                            >
+                                <Input
+                                    size="large"
+                                    placeholder="example@gmail.com"
+                                    prefix={<MailOutlined style={{ color: '#94A3B8' }} />}
+                                    style={{ borderRadius: 10 }}
+                                />
+                            </Form.Item>
+                        </Col>
+                    </Row>
 
-                    <Form.Item
-                        label="Email"
-                        name="email"
-                        rules={[
-                            { required: true, message: 'Vui lòng nhập email' },
-                            { type: 'email', message: 'Email không hợp lệ' },
-                        ]}
-                    >
-                        <Input />
-                    </Form.Item>
+                    <Row gutter={24}>
+                        <Col span={12}>
+                            <Form.Item
+                                label={<span style={{ fontWeight: 600, color: '#475569' }}>Mật khẩu đăng nhập</span>}
+                                name="password"
+                                rules={[
+                                    { required: true, message: 'Vui lòng nhập mật khẩu' },
+                                    { min: 8, message: 'Mật khẩu phải có ít nhất 8 ký tự' },
+                                ]}
+                            >
+                                <Input.Password
+                                    size="large"
+                                    placeholder="••••••••"
+                                    prefix={<LockOutlined style={{ color: '#94A3B8' }} />}
+                                    style={{ borderRadius: 10 }}
+                                />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                label={<span style={{ fontWeight: 600, color: '#475569' }}>Số điện thoại</span>}
+                                name="phoneNumber"
+                            >
+                                <Input
+                                    size="large"
+                                    placeholder="09xx xxx xxx"
+                                    prefix={<PhoneOutlined style={{ color: '#94A3B8' }} />}
+                                    style={{ borderRadius: 10 }}
+                                />
+                            </Form.Item>
+                        </Col>
+                    </Row>
 
-                    <Form.Item
-                        label="Mật khẩu"
-                        name="password"
-                        rules={[
-                            { required: true, message: 'Vui lòng nhập mật khẩu' },
-                            { min: 8, message: 'Mật khẩu phải có ít nhất 8 ký tự' },
-                        ]}
-                    >
-                        <Input.Password />
-                    </Form.Item>
-
-                    <Form.Item label="Số điện thoại" name="phoneNumber">
-                        <Input />
-                    </Form.Item>
-
-                    <Form.Item label="Giới tính" name="gender">
-                        <Select allowClear placeholder="Chọn giới tính">
-                            <Option value="MALE">Nam</Option>
-                            <Option value="FEMALE">Nữ</Option>
-                            <Option value="OTHER">Khác</Option>
-                        </Select>
-                    </Form.Item>
-
-                    <Form.Item
-                        label="Role"
-                        name="role"
-                        rules={[{ required: true, message: 'Vui lòng chọn role' }]}
-                    >
-                        <Select>
-                            <Option value="STUDENT">Học viên</Option>
-                            <Option value="STAFF">Nhân viên</Option>
-                            <Option value="ADMIN">Quản trị viên</Option>
-                        </Select>
-                    </Form.Item>
-
-                    <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.role !== currentValues.role}>
-                        {({ getFieldValue }) => {
-                            const role = getFieldValue('role');
-                            // Only show TOEIC fields for STUDENT
-                            if (role !== 'STUDENT') return null;
-
-                            return (
-                                <>
-                                    <Form.Item label="Tiến độ AI (%)" name="progress">
-                                        <InputNumber min={0} max={100} style={{ width: '100%' }} />
-                                    </Form.Item>
-                                </>
-                            );
-                        }}
-                    </Form.Item>
+                    <Row gutter={24}>
+                        <Col span={12}>
+                            <Form.Item
+                                label={<span style={{ fontWeight: 600, color: '#475569' }}>Giới tính</span>}
+                                name="gender"
+                            >
+                                <Select
+                                    size="large"
+                                    style={{ borderRadius: 10 }}
+                                    allowClear
+                                    placeholder="Chọn giới tính"
+                                    suffixIcon={<UserOutlined style={{ color: '#94A3B8' }} />}
+                                >
+                                    <Option value="MALE">Nam</Option>
+                                    <Option value="FEMALE">Nữ</Option>
+                                    <Option value="OTHER">Khác</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                label={<span style={{ fontWeight: 600, color: '#475569' }}>Vai trò hệ thống</span>}
+                                name="role"
+                                rules={[{ required: true, message: 'Vui lòng chọn vai trò' }]}
+                            >
+                                <Select
+                                    size="large"
+                                    style={{ borderRadius: 10 }}
+                                    suffixIcon={<SafetyCertificateOutlined style={{ color: '#94A3B8' }} />}
+                                >
+                                    <Option value="ADMIN">Quản trị viên</Option>
+                                    <Option value="SPECIALIST">Chuyên viên</Option>
+                                    <Option value="STUDENT">Học viên</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
                 </Form>
             </Modal>
         </div>

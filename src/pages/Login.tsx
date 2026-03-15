@@ -16,8 +16,9 @@ export default function Login() {
             const response = await authApi.login(values);
 
             if (response.success && response.user && response.token) {
-                // Check if user is ADMIN
-                if (response.user.role !== 'ADMIN') {
+                // Allow ADMIN, SPECIALIST, and REVIEWER
+                const allowedRoles = ['ADMIN', 'SPECIALIST', 'REVIEWER'];
+                if (!allowedRoles.includes(response.user.role)) {
                     message.error('Bạn không có quyền truy cập Trang quản trị!');
                     setLoading(false);
                     return;
@@ -28,7 +29,13 @@ export default function Login() {
                 localStorage.setItem('admin_user', JSON.stringify(response.user));
 
                 message.success('Đăng nhập thành công!');
-                navigate('/dashboard');
+                
+                // Redirect based on role
+                if (response.user.role === 'ADMIN') {
+                    navigate('/dashboard');
+                } else {
+                    navigate('/exam-bank');
+                }
             } else {
                 message.error(response.message || 'Đăng nhập thất bại');
                 setLoading(false);

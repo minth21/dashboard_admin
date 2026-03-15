@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
     baseURL: '/api',
+    timeout: 600000, // 10 minutes for long AI tasks
     headers: {
         'Content-Type': 'application/json',
     },
@@ -25,7 +26,7 @@ export interface User {
     id: string;
     email: string;
     name: string;
-    role: 'STUDENT' | 'ADMIN';
+    role: 'STUDENT' | 'ADMIN' | 'SPECIALIST' | 'REVIEWER';
     avatarUrl?: string;
     createdAt: string;
 }
@@ -132,7 +133,7 @@ export const testApi = {
         const difficultyParam = difficulty && difficulty !== 'ALL' ? `&difficulty=${difficulty}` : '';
         const statusParam = status && status !== 'ALL' ? `&status=${status}` : '';
         const searchParam = search ? `&search=${search}` : '';
-        const response = await api.get(`/tests?page=${page}&limit=${limit}${difficultyParam}${statusParam}${searchParam}`);
+        const response = await api.get(`/tests?page=${page}&limit=${limit}${difficultyParam}${statusParam}${searchParam}&t=${Date.now()}`);
         return response.data;
     },
     getDetails: async (testId: string): Promise<{ success: boolean; test: any }> => {
@@ -175,15 +176,6 @@ export const questionApi = {
         });
         return response.data;
     },
-    /**
-     * Generate AI explanations for multiple questions in a part
-     */
-    generateBatchExplanations: async (partId: string, questionIds: number[]): Promise<{ success: boolean; message: string; count: number }> => {
-        const response = await api.post(`/parts/${partId}/questions/generate-explanations`, {
-            questionIds
-        });
-        return response.data;
-    }
 };
 
 /**
@@ -222,6 +214,26 @@ export const userApi = {
 export const aiApi = {
     generateExplanation: async (data: any): Promise<{ success: boolean; explanation: string; message?: string }> => {
         const response = await api.post('/ai/generate-explanation', data);
+        return response.data;
+    },
+    generateReadingExplanation: async (data: any, partNumber: number = 7): Promise<{ success: boolean; data: any; message?: string }> => {
+        const formData = new FormData();
+        if (data.passageText) formData.append('passageText', data.passageText);
+        if (data.images && data.images.length > 0) {
+            data.images.forEach((img: any) => formData.append('images', img));
+        }
+        formData.append('questions', JSON.stringify(data.questions));
+
+        const endpoint = partNumber === 6 ? '/ai/generate-part6' : '/ai/generate-part7';
+        const response = await api.post(endpoint, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+    magicScanPart7: async (formData: FormData): Promise<{ success: boolean; data: any; message?: string }> => {
+        const response = await api.post('/ai/magic-scan-part7', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
         return response.data;
     }
 };

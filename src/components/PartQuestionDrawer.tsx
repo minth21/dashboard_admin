@@ -13,19 +13,33 @@ import {
     Tag,
     Popconfirm,
     List,
-    Card
+    Card,
+    Row,
+    Col,
+    Typography,
+    Empty
 } from 'antd';
 import {
     DeleteOutlined,
-    EditOutlined
+    EditOutlined,
+    ExperimentOutlined,
+    BookOutlined,
+    TranslationOutlined,
+    CheckCircleOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import ReactQuill from 'react-quill-new';
 import 'quill/dist/quill.snow.css';
+import { useOutletContext } from 'react-router-dom'; // <-- THÊM ĐỂ PHÂN QUYỀN
 const { Option } = Select;
+const { Text } = Typography;
 import api from '../services/api';
+import { QUILL_MODULES, QUILL_FORMATS } from '../utils/editorUtils';
+
+const modernShadow = '0 10px 30px -5px rgba(37, 99, 235, 0.08), 0 4px 10px -6px rgba(37, 99, 235, 0.04)';
 
 import CreatePart6Modal from './CreatePart6Modal';
+import CreatePart7Modal from './CreatePart7Modal';
 
 interface Question {
     id: string;
@@ -38,6 +52,7 @@ interface Question {
     correctAnswer: string;
     explanation?: string;
     passage?: string;
+    passageTranslationData?: string;
 }
 
 interface PartQuestionDrawerProps {
@@ -56,6 +71,10 @@ export default function PartQuestionDrawer({
     partName,
     initialEditQuestionId,
 }: PartQuestionDrawerProps) {
+    // THÊM LOGIC KIỂM TRA ROLE TỪ CONTEXT
+    const { user } = useOutletContext<{ user: any }>();
+    const isReviewer = user?.role === 'REVIEWER';
+
     const [questions, setQuestions] = useState<Question[]>([]);
     const [loading, setLoading] = useState(false);
     const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -63,23 +82,13 @@ export default function PartQuestionDrawer({
     const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
     const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
 
-    // Quill editor configuration
-    const quillModules = {
-        toolbar: [
-            ['bold', 'italic', 'underline'],
-            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-            ['clean']
-        ]
-    };
-
-    const quillFormats = [
-        'bold', 'italic', 'underline',
-        'list', 'bullet'
-    ];
     const [createForm] = Form.useForm();
     const [editForm] = Form.useForm();
-    const [isPart6, setIsPart6] = useState(false);
+    const [isProPart, setIsProPart] = useState(false);
     const [createPart6ModalVisible, setCreatePart6ModalVisible] = useState(false);
+    const [createPart7ModalVisible, setCreatePart7ModalVisible] = useState(false); // Thêm state cho Part 7 modal
+    const [partProEditMode, setPartProEditMode] = useState<'add' | 'edit'>('add');
+    const [partProEditData, setPartProEditData] = useState<any>(null);
 
     useEffect(() => {
         if (open && partId) {
@@ -88,19 +97,14 @@ export default function PartQuestionDrawer({
         }
     }, [open, partId]);
 
-
-
     const checkPartType = async () => {
         if (!partId) return;
         try {
             const response = await api.get(`/parts/${partId}`);
             const data = response.data;
             if (data.success) {
-                if (data.part.partNumber === 6) {
-                    setIsPart6(true);
-                } else {
-                    setIsPart6(false);
-                }
+                const partNum = data.part.partNumber;
+                setIsProPart(partNum === 6 || partNum === 7);
             }
         } catch (error) {
             console.error('Error checking part type:', error);
@@ -164,37 +168,24 @@ export default function PartQuestionDrawer({
     const handleEditQuestion = async (values: any) => {
         if (!editingQuestion) return;
         try {
-
-            // Logic specifically for Part 6: Sync passage across the group (sets of 4)
-            if (isPart6 && values.passage) {
+            // Logic specifically for Part 6/7: Sync passage across the group
+            if (isProPart && values.passage) {
                 const qNum = editingQuestion.questionNumber;
-                // Calculate group range (e.g., 1-4, 5-8, 9-12...)
-                // index (0-based) = qNum - 1
-                // groupIndex = floor((qNum - 1) / 4)
-                // startQ = groupIndex * 4 + 1
-                // endQ = startQ + 3
                 const groupIndex = Math.floor((qNum - 1) / 4);
                 const startQ = groupIndex * 4 + 1;
                 const endQ = startQ + 3;
 
-                // Find all questions in this group (including the current one)
                 const groupQuestions = questions.filter(
                     q => q.questionNumber >= startQ && q.questionNumber <= endQ
                 );
 
-                // Update requests
                 const updatePromises = groupQuestions.map(q => {
                     const isCurrent = q.id === editingQuestion.id;
-                    // For current question: update ALL fields from values
-                    // For neighbors: update ONLY passage
                     const payload = isCurrent ? values : { passage: values.passage };
-
                     return api.patch(`/questions/${q.id}`, payload).then(res => res.data);
                 });
 
                 const results = await Promise.all(updatePromises);
-
-                // Check if any failed
                 const failed = results.find(r => !r.success);
                 if (failed) {
                     message.error('Có lỗi xảy ra khi đồng bộ đoạn văn');
@@ -202,8 +193,6 @@ export default function PartQuestionDrawer({
                 }
 
                 message.success('Cập nhật câu hỏi và đồng bộ đoạn văn thành công');
-
-                // Update local state for ALL affected questions
                 setQuestions(prevQuestions =>
                     prevQuestions.map(q => {
                         const updatedResult = results.find((r: any) => r.question.id === q.id);
@@ -218,12 +207,9 @@ export default function PartQuestionDrawer({
                 // Logic for other Parts (Single update)
                 const response = await api.patch(`/questions/${editingQuestion.id}`, values);
                 const data = response.data;
-                console.log('Update response:', data); // Debug log
 
                 if (data.success) {
                     message.success('Cập nhật câu hỏi thành công');
-
-                    // Update local state instead of refetching to avoid triggering auto-open
                     setQuestions(prevQuestions =>
                         prevQuestions.map(q =>
                             q.id === editingQuestion.id ? data.question : q
@@ -231,7 +217,7 @@ export default function PartQuestionDrawer({
                     );
                 } else {
                     message.error(data.message || 'Cập nhật câu hỏi thất bại');
-                    return; // Stop here
+                    return; 
                 }
             }
 
@@ -240,12 +226,10 @@ export default function PartQuestionDrawer({
             editForm.resetFields();
 
         } catch (error) {
-            console.error('Update error:', error); // Debug log
+            console.error('Update error:', error);
             message.error('Có lỗi xảy ra');
         }
     };
-
-
 
     const handleDeleteAllQuestions = async () => {
         if (!partId) return;
@@ -265,7 +249,6 @@ export default function PartQuestionDrawer({
         }
     };
 
-    // Calculate row spans for Part 6 passages
     const passageRowSpans = React.useMemo(() => {
         const spans: Record<number, number> = {};
         if (!questions || questions.length === 0) return spans;
@@ -298,7 +281,7 @@ export default function PartQuestionDrawer({
     }, [questions]);
 
     const columns: ColumnsType<Question> = [
-        ...(isPart6 ? [{
+        ...(isProPart ? [{
             title: 'Đoạn văn',
             dataIndex: 'passage',
             key: 'passage',
@@ -325,7 +308,7 @@ export default function PartQuestionDrawer({
             key: 'questionText',
             render: (text, record) => (
                 <div style={{ maxWidth: 400 }}>
-                    {!isPart6 && record.passage && (
+                    {!isProPart && record.passage && (
                         <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             Passage: {record.passage}
                         </div>
@@ -375,8 +358,7 @@ export default function PartQuestionDrawer({
         },
     ];
 
-    // Helper to group questions by passage for Part 6
-    const renderPart6Layout = () => {
+    const renderProLayout = () => {
         if (!questions || questions.length === 0) return <Table columns={columns} dataSource={[]} />;
 
         const groups: { passage: string; questions: Question[] }[] = [];
@@ -393,43 +375,194 @@ export default function PartQuestionDrawer({
 
         return (
             <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
-                {groups.map((group, index) => (
-                    <Card key={index} style={{ marginBottom: 24, border: '1px solid #d9d9d9' }} bodyStyle={{ padding: '0' }}>
-                        {/* Header: Passage */}
-                        <div style={{
-                            padding: '16px',
-                            borderBottom: '1px solid #f0f0f0',
-                            background: '#fafafa',
-                            maxHeight: 300,
-                            overflowY: 'auto'
-                        }}>
-                            <div style={{ fontWeight: 600, marginBottom: 8, color: '#1890ff' }}>Đoạn văn {index + 1}:</div>
-                            <div dangerouslySetInnerHTML={{ __html: group.passage }} />
-                        </div>
+                {groups.map((group, index) => {
+                    // 1. Phân tách dữ liệu dịch từ AI
+                    let aiTranslations: any[] = [];
+                    const firstQ = group.questions[0];
+                    if (firstQ?.passageTranslationData) {
+                        try {
+                            const raw = JSON.parse(firstQ.passageTranslationData);
+                            aiTranslations = Array.isArray(raw) 
+                                ? raw 
+                                : (raw.passages || raw.passageTranslations || []);
+                        } catch (e) {
+                            console.error('Lỗi parse AI translations:', e);
+                        }
+                    }
 
-                        {/* Body: Questions */}
-                        <div style={{ padding: '16px' }}>
-                            <List
-                                grid={{ gutter: 16, column: 1 }} // List items stack vertically
-                                dataSource={group.questions}
-                                renderItem={(item) => (
-                                    <List.Item>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px dashed #f0f0f0' }}>
-                                            <div style={{ flex: 1 }}>
-                                                <strong style={{ marginRight: 8, color: '#1890ff' }}>{item.questionNumber}.</strong>
-                                                <Space size="large">
-                                                    <span>A. {item.optionA}</span>
-                                                    <span>B. {item.optionB}</span>
-                                                    <span>C. {item.optionC}</span>
-                                                    <span>D. {item.optionD}</span>
-                                                </Space>
-                                            </div>
-                                            <div>
-                                                <Space>
-                                                    <Tag color="green">{item.correctAnswer}</Tag>
+                    return (
+                        <Card 
+                            key={index} 
+                            hoverable
+                            style={{ 
+                                marginBottom: 32, 
+                                borderRadius: 16, 
+                                overflow: 'hidden',
+                                boxShadow: modernShadow,
+                                border: 'none'
+                            }} 
+                            bodyStyle={{ padding: '0' }}
+                        >
+                             <div style={{
+                                padding: '20px',
+                                background: '#fff',
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <div style={{ 
+                                            width: 32, height: 32, borderRadius: '50%', 
+                                            background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            color: '#fff', fontWeight: 800, fontSize: 14,
+                                            boxShadow: '0 4px 10px rgba(37, 99, 235, 0.3)'
+                                        }}>
+                                            {index + 1}
+                                        </div>
+                                        <span style={{ fontWeight: 700, fontSize: 16, color: '#1E3A8A' }}>
+                                            {group.questions[0]?.questionNumber > 146 ? 'Part 7 Passages' : 'Đoạn văn TOEIC'}
+                                        </span>
+                                    </div>
+                                    <Button
+                                        type="primary"
+                                        size="middle"
+                                        ghost
+                                        icon={<ExperimentOutlined />}
+                                        style={{ borderRadius: 8, fontWeight: 600 }}
+                                        onClick={() => {
+                                            setPartProEditData({ questions: group.questions, passage: group.passage });
+                                            setPartProEditMode('edit');
+                                            if (questions[0]?.passage?.includes('<img') || questions[0]?.passageTranslationData) {
+                                                const partNum = questions[0]?.questionNumber > 146 ? 7 : 6;
+                                                if (partNum === 7) setCreatePart7ModalVisible(true);
+                                                else setCreatePart6ModalVisible(true);
+                                            } else {
+                                                setCreatePart6ModalVisible(true);
+                                            }
+                                        }}
+                                    >
+                                        Chỉnh sửa Pro
+                                    </Button>
+                                </div>
+
+                                {/* 2. Chia 2 cột: Gốc và Dịch */}
+                                <Row gutter={24}>
+                                    {/* Cột Trái: Nội dung gốc */}
+                                    <Col span={12}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                            <BookOutlined style={{ color: '#2563EB', fontSize: 18 }} />
+                                            <span style={{ fontWeight: 600, color: '#475569' }}>Nội dung gốc</span>
+                                        </div>
+                                        <div style={{ 
+                                            maxHeight: 450, 
+                                            overflowY: 'auto', 
+                                            background: '#F8FAFC', 
+                                            padding: 16, 
+                                            borderRadius: 12, 
+                                            border: '1px solid #E2E8F0',
+                                            lineHeight: '1.6',
+                                            color: '#1E293B'
+                                        }}>
+                                            <div dangerouslySetInnerHTML={{ __html: group.passage }} className="pro-passage-content" />
+                                        </div>
+                                    </Col>
+
+                                    {/* Cột Phải: Bản dịch AI */}
+                                    <Col span={12}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                            <TranslationOutlined style={{ color: '#7C3AED', fontSize: 18 }} />
+                                            <span style={{ fontWeight: 600, color: '#475569' }}>Bản dịch AI (Premium)</span>
+                                        </div>
+                                        <div style={{ 
+                                            maxHeight: 450, 
+                                            overflowY: 'auto', 
+                                            background: 'linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%)', 
+                                            padding: 16, 
+                                            borderRadius: 12, 
+                                            border: '1px solid #DDD6FE',
+                                            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                                        }}>
+                                            {aiTranslations.length > 0 ? (
+                                                aiTranslations.map((p: any, pIdx: number) => (
+                                                    <div key={pIdx} style={{ marginBottom: 20 }}>
+                                                        <div style={{ 
+                                                            display: 'flex', alignItems: 'center', gap: 8, 
+                                                            marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid #EDE9FE' 
+                                                        }}>
+                                                            <div style={{ width: 4, height: 16, background: '#8B5CF6', borderRadius: 2 }} />
+                                                            <Text strong style={{ color: '#5B21B6', fontSize: 14 }}>
+                                                                {p.label || `Đoạn ${pIdx + 1}`}
+                                                            </Text>
+                                                        </div>
+                                                        {(p.items || p.sentences || []).map((s: any, sIdx: number) => (
+                                                            <div key={sIdx} style={{ 
+                                                                marginBottom: 12, padding: '8px 12px', background: 'rgba(255,255,255,0.5)',
+                                                                borderRadius: 8, border: '1px solid rgba(139, 92, 246, 0.1)'
+                                                            }}>
+                                                                <div style={{ color: '#1E293B', fontSize: 13, fontWeight: 500 }}>{s.en}</div>
+                                                                <div style={{ color: '#6D28D9', fontSize: 13, fontStyle: 'italic', marginTop: 4, opacity: 0.9 }}>
+                                                                    → {s.vi}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <Empty 
+                                                    image={Empty.PRESENTED_IMAGE_SIMPLE} 
+                                                    description={<span style={{ fontSize: 12, color: '#94A3B8' }}>Chưa có bản dịch AI</span>} 
+                                                    style={{ margin: '60px 0' }}
+                                                />
+                                            )}
+                                        </div>
+                                    </Col>
+                                </Row>
+                            </div>
+
+                            <div style={{ padding: '24px', background: '#fff' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                                    <CheckCircleOutlined style={{ color: '#10B981', fontSize: 20 }} />
+                                    <span style={{ fontWeight: 700, fontSize: 15, color: '#334155' }}>Danh sách câu hỏi</span>
+                                </div>
+                                <List
+                                    grid={{ gutter: 20, column: 1 }}
+                                    dataSource={group.questions}
+                                    renderItem={(item) => (
+                                        <List.Item style={{ marginBottom: 16 }}>
+                                            <div style={{ 
+                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                                                padding: '16px', borderRadius: 12, background: '#F1F5F9',
+                                                border: '1px solid #E2E8F0',
+                                                transition: 'all 0.3s'
+                                            }} className="hover-item-shadow">
+                                                <div style={{ flex: 1 }}>
+                                                    <Space size="middle" align="start">
+                                                        <div style={{ 
+                                                            width: 28, height: 28, borderRadius: 6, 
+                                                            background: '#fff', border: '1px solid #CBD5E1',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            fontWeight: 700, color: '#475569', fontSize: 12
+                                                        }}>
+                                                            {item.questionNumber}
+                                                        </div>
+                                                        <Space size="large" wrap style={{ color: '#334155', fontWeight: 500 }}>
+                                                            <span><Tag color="blue" style={{ borderRadius: 4 }}>A</Tag> {item.optionA}</span>
+                                                            <span><Tag color="blue" style={{ borderRadius: 4 }}>B</Tag> {item.optionB}</span>
+                                                            <span><Tag color="blue" style={{ borderRadius: 4 }}>C</Tag> {item.optionC}</span>
+                                                            <span><Tag color="blue" style={{ borderRadius: 4 }}>D</Tag> {item.optionD}</span>
+                                                        </Space>
+                                                    </Space>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                    <Tag color="green" style={{ 
+                                                        fontWeight: 800, padding: '4px 12px', borderRadius: 6,
+                                                        border: '1px solid #10B981', background: '#ECFDF5' 
+                                                    }}>
+                                                        Đáp án: {item.correctAnswer}
+                                                    </Tag>
                                                     <Button
-                                                        type="link"
-                                                        icon={<EditOutlined />}
+                                                        type="text"
+                                                        icon={<EditOutlined style={{ color: '#2563EB' }} />}
+                                                        style={{ background: '#EFF6FF', borderRadius: 8 }}
                                                         onClick={() => {
                                                             setEditingQuestion(item);
                                                             editForm.setFieldsValue({
@@ -445,18 +578,16 @@ export default function PartQuestionDrawer({
                                                             });
                                                             setEditModalVisible(true);
                                                         }}
-                                                    >
-                                                        Sửa
-                                                    </Button>
-                                                </Space>
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
-                                    </List.Item>
-                                )}
-                            />
-                        </div>
-                    </Card>
-                ))}
+                                        </List.Item>
+                                    )}
+                                />
+                            </div>
+                        </Card>
+                    );
+                })}
             </div>
         );
     };
@@ -468,45 +599,30 @@ export default function PartQuestionDrawer({
             onClose={onClose}
             open={open}
             extra={
-                <Space>
-                    {selectedQuestionIds.length > 0 ? (
-                        <Popconfirm
-                            title="Xóa các câu hỏi đã chọn"
-                            description={`Bạn có chắc chắn muốn xóa ${selectedQuestionIds.length} câu hỏi đã chọn?`}
-                            onConfirm={async () => {
-                                try {
-                                    const response = await api.delete('/questions/bulk', {
-                                        data: { questionIds: selectedQuestionIds }
-                                    });
-                                    const data = response.data;
-                                    if (data.success) {
-                                        message.success(data.message || `Đã xóa ${selectedQuestionIds.length} câu hỏi`);
-                                        setSelectedQuestionIds([]);
-                                        fetchQuestions();
-                                    } else {
-                                        message.error(data.message || 'Không thể xóa câu hỏi');
-                                    }
-                                } catch (error) {
-                                    message.error('Có lỗi xảy ra khi xóa câu hỏi');
-                                }
-                            }}
-                            okText="Xóa"
-                            cancelText="Hủy"
-                            okButtonProps={{ danger: true }}
-                        >
-                            <Button
-                                danger
-                                icon={<DeleteOutlined />}
-                            >
-                                Xóa đã chọn ({selectedQuestionIds.length})
-                            </Button>
-                        </Popconfirm>
-                    ) : (
-                        questions.length > 0 && (
+                // ẨN NÚT XÓA NẾU LÀ REVIEWER
+                !isReviewer && (
+                    <Space>
+                        {selectedQuestionIds.length > 0 ? (
                             <Popconfirm
-                                title="Xóa tất cả câu hỏi"
-                                description={`Bạn có chắc chắn muốn xóa tất cả ${questions.length} câu hỏi? Hành động này không thể hoàn tác!`}
-                                onConfirm={handleDeleteAllQuestions}
+                                title="Xóa các câu hỏi đã chọn"
+                                description={`Bạn có chắc chắn muốn xóa ${selectedQuestionIds.length} câu hỏi đã chọn?`}
+                                onConfirm={async () => {
+                                    try {
+                                        const response = await api.delete('/questions/bulk', {
+                                            data: { questionIds: selectedQuestionIds }
+                                        });
+                                        const data = response.data;
+                                        if (data.success) {
+                                            message.success(data.message || `Đã xóa ${selectedQuestionIds.length} câu hỏi`);
+                                            setSelectedQuestionIds([]);
+                                            fetchQuestions();
+                                        } else {
+                                            message.error(data.message || 'Không thể xóa câu hỏi');
+                                        }
+                                    } catch (error) {
+                                        message.error('Có lỗi xảy ra khi xóa câu hỏi');
+                                    }
+                                }}
                                 okText="Xóa"
                                 cancelText="Hủy"
                                 okButtonProps={{ danger: true }}
@@ -515,17 +631,33 @@ export default function PartQuestionDrawer({
                                     danger
                                     icon={<DeleteOutlined />}
                                 >
-                                    Xóa tất cả
+                                    Xóa đã chọn ({selectedQuestionIds.length})
                                 </Button>
                             </Popconfirm>
-                        )
-                    )}
-
-
-                </Space>
+                        ) : (
+                            questions.length > 0 && (
+                                <Popconfirm
+                                    title="Xóa tất cả câu hỏi"
+                                    description={`Bạn có chắc chắn muốn xóa tất cả ${questions.length} câu hỏi? Hành động này không thể hoàn tác!`}
+                                    onConfirm={handleDeleteAllQuestions}
+                                    okText="Xóa"
+                                    cancelText="Hủy"
+                                    okButtonProps={{ danger: true }}
+                                >
+                                    <Button
+                                        danger
+                                        icon={<DeleteOutlined />}
+                                    >
+                                        Xóa tất cả
+                                    </Button>
+                                </Popconfirm>
+                            )
+                        )}
+                    </Space>
+                )
             }
         >
-            {isPart6 ? renderPart6Layout() : (
+            {isProPart ? renderProLayout() : (
                 <Table
                     columns={columns}
                     dataSource={questions}
@@ -539,12 +671,32 @@ export default function PartQuestionDrawer({
                 />
             )}
 
-            {/* Create Batch Modal (Part 6) */}
+            {/* Modal Part 6 */}
             <CreatePart6Modal
                 open={createPart6ModalVisible}
-                onCancel={() => setCreatePart6ModalVisible(false)}
+                onCancel={() => {
+                    setCreatePart6ModalVisible(false);
+                    setPartProEditMode('add');
+                    setPartProEditData(null);
+                }}
                 onSuccess={fetchQuestions}
                 partId={partId}
+                mode={partProEditMode}
+                initialData={partProEditData}
+            />
+
+            {/* Modal Part 7 */}
+            <CreatePart7Modal
+                open={createPart7ModalVisible}
+                onCancel={() => {
+                    setCreatePart7ModalVisible(false);
+                    setPartProEditMode('add');
+                    setPartProEditData(null);
+                }}
+                onSuccess={fetchQuestions}
+                partId={partId}
+                mode={partProEditMode}
+                initialData={partProEditData}
             />
 
             {/* Create Manual Modal (Normal) */}
@@ -584,20 +736,18 @@ export default function PartQuestionDrawer({
                         </Form.Item>
                     </div>
 
-                    {/* Passage field for Part 6 */}
-                    {isPart6 && (
+                    {isProPart && (
                         <Form.Item label="Đoạn văn" name="passage">
                             <ReactQuill
                                 theme="snow"
-                                modules={quillModules}
-                                formats={quillFormats}
+                                modules={QUILL_MODULES}
+                                formats={QUILL_FORMATS}
                                 placeholder="Nhập đoạn văn..."
                             />
                         </Form.Item>
                     )}
 
-                    {/* Question text field for Part 5 (optional/hidden for Part 6) */}
-                    {!isPart6 && (
+                    {!isProPart && (
                         <Form.Item
                             label="Nội dung câu hỏi"
                             name="questionText"
@@ -605,8 +755,8 @@ export default function PartQuestionDrawer({
                         >
                             <ReactQuill
                                 theme="snow"
-                                modules={quillModules}
-                                formats={quillFormats}
+                                modules={QUILL_MODULES}
+                                formats={QUILL_FORMATS}
                                 placeholder="Nhập nội dung câu hỏi..."
                             />
                         </Form.Item>
@@ -627,14 +777,7 @@ export default function PartQuestionDrawer({
                         </Form.Item>
                     </div>
 
-                    <Form.Item label="Giải thích (Optional)" name="explanation">
-                        <ReactQuill
-                            theme="snow"
-                            modules={quillModules}
-                            formats={quillFormats}
-                            placeholder="Nhập giải thích..."
-                        />
-                    </Form.Item>
+
                 </Form>
             </Modal>
 
@@ -679,20 +822,17 @@ export default function PartQuestionDrawer({
                         </Form.Item>
                     </div>
 
-                    {/* Passage field for Part 6 */}
                     {editingQuestion?.passage && (
                         <Form.Item label="Đoạn văn" name="passage">
                             <ReactQuill
                                 theme="snow"
-                                modules={quillModules}
-                                formats={quillFormats}
+                                modules={QUILL_MODULES}
+                                formats={QUILL_FORMATS}
                                 placeholder="Nhập đoạn văn..."
                             />
                         </Form.Item>
                     )}
 
-                    {/* Question text field for Part 5 (optional for Part 6) */}
-                    {/* Question text field for Part 5 (optional for Part 6) */}
                     {!editingQuestion?.passage && (
                         <Form.Item
                             label="Nội dung câu hỏi"
@@ -701,8 +841,8 @@ export default function PartQuestionDrawer({
                         >
                             <ReactQuill
                                 theme="snow"
-                                modules={quillModules}
-                                formats={quillFormats}
+                                modules={QUILL_MODULES}
+                                formats={QUILL_FORMATS}
                                 placeholder="Nhập nội dung câu hỏi..."
                             />
                         </Form.Item>
@@ -723,14 +863,7 @@ export default function PartQuestionDrawer({
                         </Form.Item>
                     </div>
 
-                    <Form.Item label="Giải thích (Optional)" name="explanation">
-                        <ReactQuill
-                            theme="snow"
-                            modules={quillModules}
-                            formats={quillFormats}
-                            placeholder="Nhập giải thích..."
-                        />
-                    </Form.Item>
+
                 </Form>
             </Modal>
         </Drawer>

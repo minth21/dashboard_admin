@@ -17,11 +17,13 @@ import {
     Drawer,
     Upload,
     Checkbox,
-    Radio,
-    Image as AntImage
+    Image as AntImage,
+    Row,
+    Col,
+    Empty
 } from 'antd';
 
-const { Dragger } = Upload;
+
 import {
     DeleteOutlined,
     EditOutlined,
@@ -29,7 +31,9 @@ import {
     PlusOutlined,
     UploadOutlined,
     DownloadOutlined,
-    InboxOutlined
+    BookOutlined,
+    TranslationOutlined,
+    CheckCircleOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
@@ -46,7 +50,7 @@ import CreatePart2BulkModal from '../components/CreatePart2BulkModal'; // Change
 import CreatePart3Modal from '../components/CreatePart3Modal';
 import CreatePart5BulkModal from '../components/CreatePart5BulkModal';
 import AudioPlayer from '../components/AudioPlayer';
-import { uploadApi, partApi, questionApi, aiApi } from '../services/api';
+import { uploadApi, partApi, questionApi } from '../services/api';
 
 // --- Interfaces ---
 interface Question {
@@ -62,6 +66,7 @@ interface Question {
     correctAnswer: string;
     explanation?: string;
     passage?: string;
+    passageTranslationData?: string;
 }
 
 interface Part {
@@ -75,7 +80,9 @@ interface Part {
 }
 
 const { Option } = Select;
-const { Title } = Typography;
+const { Title, Text } = Typography;
+
+const modernShadow = '0 10px 30px -5px rgba(37, 99, 235, 0.08), 0 4px 10px -6px rgba(37, 99, 235, 0.04)';
 
 export default function PartDetail() {
     const { testId, partId } = useParams<{ testId: string; partId: string }>();
@@ -99,11 +106,7 @@ export default function PartDetail() {
     const [part5ImportMode, setPart5ImportMode] = useState<'new' | 'append' | 'replace'>('new'); // Track import mode
 
     // Passage Edit State
-    const [editPassageModalVisible, setEditPassageModalVisible] = useState(false);
-    const [currentPassageQuestions, setCurrentPassageQuestions] = useState<Question[]>([]);
-    const [passageForm] = Form.useForm();
-    // New state for Part 7 Images
-    const [editPassageFileList, setEditPassageFileList] = useState<any[]>([]);
+    const [editingGroup, setEditingGroup] = useState<any>(null);
 
     // --- Selected Item States ---
     const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
@@ -170,42 +173,6 @@ export default function PartDetail() {
         }
     };
 
-    const handleGenerateQuestionAI = async (form: any) => {
-        try {
-            const values = form.getFieldsValue();
-            if (!values.questionText || !values.correctAnswer) {
-                message.warning('Vui lòng nhập nội dung câu hỏi và chọn đáp án đúng trước khi tạo lời giải AI');
-                return;
-            }
-
-            message.loading({ content: 'Đang tạo lời giải AI...', key: 'genAI' });
-
-            const cleanText = values.questionText.replace(/<[^>]*>?/gm, '');
-
-            const response = await aiApi.generateExplanation({
-                questionText: cleanText,
-                options: {
-                    A: values.optionA || '',
-                    B: values.optionB || '',
-                    C: values.optionC || '',
-                    D: values.optionD || ''
-                },
-                correctAnswer: values.correctAnswer
-            });
-
-            if (response.success) {
-                form.setFieldsValue({
-                    explanation: response.explanation
-                });
-                message.success({ content: 'Đã tạo lời giải thành công!', key: 'genAI' });
-            } else {
-                message.error({ content: 'Không thể tạo lời giải', key: 'genAI' });
-            }
-        } catch (error) {
-            console.error(error);
-            message.error({ content: 'Lỗi khi gọi AI', key: 'genAI' });
-        }
-    };
 
     // --- Handlers: Create ---
     const handleCreateQuestion = async (values: any) => {
@@ -254,72 +221,6 @@ export default function PartDetail() {
         }
     };
 
-    const handleUpdatePassage = async (values: any) => {
-        try {
-            if (!currentPassageQuestions || currentPassageQuestions.length === 0) return;
-
-            let passageContent = '';
-            const passageType = values.passageType || 'text'; // Default to text if not specified (e.g. Part 6)
-
-            // Handle Part 7
-            if (part?.partNumber === 7) {
-                // 1. Handle Images (if 'image' or 'both')
-                let imageHtml = '';
-                if (passageType === 'image' || passageType === 'both') {
-                    const uploadedUrls: string[] = [];
-
-                    for (const file of editPassageFileList) {
-                        if (file.status === 'done' && file.url) {
-                            // Existing image
-                            uploadedUrls.push(file.url);
-                        } else {
-                            // New file to upload
-                            const fileToUpload = file.originFileObj || (file as any);
-                            if (fileToUpload) {
-                                const res = await uploadApi.image(fileToUpload);
-                                if (res.success) {
-                                    uploadedUrls.push(res.url);
-                                } else {
-                                    throw new Error('Failed to upload image during update');
-                                }
-                            }
-                        }
-                    }
-
-                    imageHtml = uploadedUrls.map(url =>
-                        `<img src="${url}" style="max-width: 100%; display: block; margin-bottom: 10px;" />`
-                    ).join('');
-                }
-
-                // 2. Handle Text (if 'text' or 'both')
-                let textHtml = '';
-                if (passageType === 'text' || passageType === 'both') {
-                    textHtml = values.passage || '';
-                }
-
-                // Combine: Images first, then Text (standard convention)
-                passageContent = imageHtml + textHtml;
-
-            } else {
-                // PART 6 (Text only)
-                passageContent = values.passage;
-            }
-
-            message.loading({ content: 'Đang cập nhật đoạn văn...', key: 'updatePassage' });
-
-            // Update all questions in the group
-            await Promise.all(currentPassageQuestions.map(q =>
-                questionApi.update(q.id, { passage: passageContent })
-            ));
-
-            message.success({ content: 'Cập nhật đoạn văn thành công!', key: 'updatePassage' });
-            setEditPassageModalVisible(false);
-            fetchQuestions();
-        } catch (error) {
-            console.error('Update passage error:', error);
-            message.error({ content: 'Lỗi khi cập nhật đoạn văn', key: 'updatePassage' });
-        }
-    };
 
     // --- Handlers: Delete ---
 
@@ -571,150 +472,242 @@ export default function PartDetail() {
 
         return (
             <div style={{ marginTop: 16 }}>
-                {groups.map((group, index) => (
-                    <Card key={index} style={{ marginBottom: 24, border: '1px solid #d9d9d9' }} bodyStyle={{ padding: 0 }}>
-                        <div style={{
-                            padding: '16px',
-                            borderBottom: '1px solid #f0f0f0',
-                            background: '#fafafa',
-                            maxHeight: 500, // Increased height for Part 7 images
-                            overflowY: 'auto'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <div style={{ display: 'flex', alignItems: 'center' }}>
-                                    <Checkbox
-                                        checked={group.questions.every(q => selectedQuestionIds.includes(q.id))}
-                                        indeterminate={
-                                            group.questions.some(q => selectedQuestionIds.includes(q.id)) &&
-                                            !group.questions.every(q => selectedQuestionIds.includes(q.id))
-                                        }
-                                        onChange={(e) => {
-                                            const checked = e.target.checked;
-                                            const groupIds = group.questions.map(q => q.id);
-                                            setSelectedQuestionIds(prev => {
-                                                if (checked) {
-                                                    // Add all group IDs that aren't already selected
-                                                    const uniqueIdsToAdd = groupIds.filter(id => !prev.includes(id));
-                                                    return [...prev, ...uniqueIdsToAdd];
-                                                } else {
-                                                    // Remove all group IDs
-                                                    return prev.filter(id => !groupIds.includes(id));
-                                                }
-                                            });
-                                        }}
-                                        style={{ marginRight: 12 }}
-                                    />
-                                    <div style={{ fontWeight: 600, color: '#1890ff' }}>
-                                        {isListeningGroup ? `Bài nghe ${index + 1}:` : `Đoạn văn ${index + 1}:`}
+                {groups.map((group, index) => {
+                    // Trích xuất dữ liệu dịch từ AI (lấy từ câu hỏi đầu tiên của nhóm)
+                    let aiTranslations: any[] = [];
+                    const firstQ = group.questions[0];
+                    if (firstQ?.passageTranslationData) {
+                        try {
+                            const raw = JSON.parse(firstQ.passageTranslationData);
+                            aiTranslations = Array.isArray(raw) 
+                                ? raw 
+                                : (raw.passages || raw.passageTranslations || []);
+                        } catch (e) {
+                            console.error('Lỗi parse AI translations:', e);
+                        }
+                    }
+
+                    return (
+                        <Card 
+                            key={index} 
+                            hoverable
+                            style={{ 
+                                marginBottom: 32, 
+                                borderRadius: 16, 
+                                overflow: 'hidden',
+                                boxShadow: modernShadow,
+                                border: 'none'
+                            }} 
+                            bodyStyle={{ padding: 0 }}
+                        >
+                            <div style={{
+                                padding: '20px',
+                                background: '#fff',
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <Checkbox
+                                            checked={group.questions.every(q => selectedQuestionIds.includes(q.id))}
+                                            indeterminate={
+                                                group.questions.some(q => selectedQuestionIds.includes(q.id)) &&
+                                                !group.questions.every(q => selectedQuestionIds.includes(q.id))
+                                            }
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                const groupIds = group.questions.map(q => q.id);
+                                                setSelectedQuestionIds(prev => {
+                                                    if (checked) {
+                                                        const uniqueIdsToAdd = groupIds.filter(id => !prev.includes(id));
+                                                        return [...prev, ...uniqueIdsToAdd];
+                                                    } else {
+                                                        return prev.filter(id => !groupIds.includes(id));
+                                                    }
+                                                });
+                                            }}
+                                        />
+                                        <div style={{ 
+                                            padding: '4px 12px', background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
+                                            borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 13,
+                                            boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
+                                        }}>
+                                            {isListeningGroup ? `Bài nghe ${index + 1}` : `Đoạn văn ${index + 1}`}
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        {isListeningGroup && group.audioUrl && (
+                                            <div style={{ width: 250 }}>
+                                                <AudioPlayer src={group.audioUrl} />
+                                            </div>
+                                        )}
+                                        {!isListeningGroup && (
+                                            <Button 
+                                                size="middle" 
+                                                type="primary" 
+                                                ghost 
+                                                icon={<EditOutlined />} 
+                                                style={{ borderRadius: 8, fontWeight: 600 }}
+                                                onClick={() => {
+                                                    setEditingGroup({
+                                                        passage: group.passage,
+                                                        questions: group.questions
+                                                    });
+                                                    if (isPart6) {
+                                                        setCreatePart6ModalVisible(true);
+                                                    } else {
+                                                        setCreatePart7ModalVisible(true);
+                                                    }
+                                                }}>
+                                                Sửa nâng cao
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center' }}>
-                                    {isListeningGroup && group.audioUrl && (
-                                        <div style={{ width: 300, marginRight: 10 }}>
-                                            <AudioPlayer src={group.audioUrl} />
-                                        </div>
-                                    )}
-                                    {!isListeningGroup && (
-                                        <Button size="small" type="primary" ghost icon={<EditOutlined />} onClick={() => {
-                                            setCurrentPassageQuestions(group.questions);
-                                            // ... existing edit passage logic ...
-                                            // (Simplifying for brevity - reusing existing logic call)
-                                            const passageHtml = group.passage || '';
-                                            if (part?.partNumber === 7) {
-                                                // ... logic from before ...
-                                                // Detect content type
-                                                const hasImg = passageHtml.includes('<img');
-                                                // Check for non-empty text content (stripping tags)
-                                                const textContent = passageHtml.replace(/<img[^>]*>/g, '').replace(/<[^>]*>/g, '').trim();
-                                                const hasText = textContent.length > 0;
 
-                                                let type = 'text';
-                                                if (hasImg && hasText) type = 'both';
-                                                else if (hasImg) type = 'image';
+                                {/* Layout 2 cột Premium */}
+                                {!isListeningGroup ? (
+                                    <Row gutter={24}>
+                                        <Col span={12}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                                <BookOutlined style={{ color: '#2563EB', fontSize: 18 }} />
+                                                <span style={{ fontWeight: 600, color: '#475569' }}>Nội dung gốc</span>
+                                            </div>
+                                            <div
+                                                className="passage-content"
+                                                dangerouslySetInnerHTML={{
+                                                    __html: (group.passage || '<p><i>(Không có nội dung đoạn văn)</i></p>')
+                                                        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                                                }}
+                                                style={{
+                                                    maxHeight: 500,
+                                                    overflowY: 'auto',
+                                                    background: '#F8FAFC',
+                                                    padding: 16,
+                                                    borderRadius: 12,
+                                                    border: '1px solid #E2E8F0',
+                                                    wordWrap: 'break-word',
+                                                    overflowWrap: 'break-word',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordBreak: 'break-word',
+                                                    lineHeight: '1.6',
+                                                    color: '#1E293B'
+                                                }}
+                                            />
+                                        </Col>
 
-                                                // Set initial type
-                                                passageForm.setFieldsValue({ passageType: type });
-
-                                                // Parse Images
-                                                const imgRegex = /<img[^>]+src="([^">]+)"/g;
-                                                let match;
-                                                const files = [];
-                                                let idCounter = 0;
-                                                while ((match = imgRegex.exec(passageHtml)) !== null) {
-                                                    files.push({
-                                                        uid: `-${idCounter++}`,
-                                                        name: `image-${idCounter}.png`,
-                                                        status: 'done',
-                                                        url: match[1]
-                                                    });
-                                                }
-                                                setEditPassageFileList(files);
-                                                const cleanText = passageHtml.replace(/<img[^>]*>/g, '');
-                                                passageForm.setFieldsValue({ passageFiles: files, passage: cleanText });
-                                            } else {
-                                                passageForm.setFieldsValue({ passage: group.passage });
-                                            }
-                                            setEditPassageModalVisible(true);
-                                        }}>
-                                            Sửa nội dung
-                                        </Button>
-                                    )}
-                                </div>
+                                        <Col span={12}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                                <TranslationOutlined style={{ color: '#7C3AED', fontSize: 18 }} />
+                                                <span style={{ fontWeight: 600, color: '#475569' }}>Bản dịch AI (Premium)</span>
+                                            </div>
+                                            <div style={{ 
+                                                maxHeight: 500, 
+                                                overflowY: 'auto', 
+                                                background: 'linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%)', 
+                                                padding: 16, 
+                                                borderRadius: 12, 
+                                                border: '1px solid #DDD6FE',
+                                                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                                            }}>
+                                                {aiTranslations.length > 0 ? (
+                                                    aiTranslations.map((p: any, pIdx: number) => (
+                                                        <div key={pIdx} style={{ marginBottom: 20 }}>
+                                                            <div style={{ 
+                                                                display: 'flex', alignItems: 'center', gap: 8, 
+                                                                marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid #EDE9FE' 
+                                                            }}>
+                                                                <div style={{ width: 4, height: 16, background: '#8B5CF6', borderRadius: 2 }} />
+                                                                <Text strong style={{ color: '#5B21B6', fontSize: 14 }}>
+                                                                    {p.label || `Đoạn ${pIdx + 1}`}
+                                                                </Text>
+                                                            </div>
+                                                            {(p.items || p.sentences || []).map((s: any, sIdx: number) => (
+                                                                <div key={sIdx} style={{ 
+                                                                    marginBottom: 12, padding: '8px 12px', background: 'rgba(255,255,255,0.5)',
+                                                                    borderRadius: 8, border: '1px solid rgba(139, 92, 246, 0.1)'
+                                                                }}>
+                                                                    <div style={{ color: '#1E293B', fontSize: 13, fontWeight: 500 }}>{s.en}</div>
+                                                                    <div style={{ color: '#6D28D9', fontSize: 13, fontStyle: 'italic', marginTop: 4, opacity: 0.9 }}>
+                                                                        → {s.vi}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <Empty 
+                                                        image={Empty.PRESENTED_IMAGE_SIMPLE} 
+                                                        description={<span style={{ fontSize: 12, color: '#94A3B8' }}>Chưa có bản dịch AI</span>} 
+                                                        style={{ margin: '60px 0' }}
+                                                    />
+                                                )}
+                                            </div>
+                                        </Col>
+                                    </Row>
+                                ) : null}
                             </div>
-                            {!isListeningGroup && (
-                                <div
-                                    className="passage-content"
-                                    dangerouslySetInnerHTML={{
-                                        __html: (group.passage || '<p><i>(Không có nội dung đoạn văn)</i></p>')
-                                            .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Support markdown bold for legacy data
-                                    }}
-                                    style={{
-                                        wordWrap: 'break-word',
-                                        overflowWrap: 'break-word',
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-word'
-                                    }}
-                                />
-                            )}
-                        </div>
-                        <div style={{ padding: '16px' }}>
-                            <List
-                                grid={{ gutter: 16, column: 1 }}
-                                dataSource={group.questions}
-                                renderItem={(item) => (
-                                    <List.Item>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px dashed #f0f0f0' }}>
-                                            <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start' }}>
-                                                <div>
-                                                    <strong style={{ marginRight: 8, color: '#1890ff' }}>{item.questionNumber}.</strong>
-                                                    <div dangerouslySetInnerHTML={{ __html: item.questionText || '' }} style={{ display: 'inline-block', verticalAlign: 'top' }} />
-                                                    <div style={{ marginTop: 4 }}>
-                                                        <Space size="large" wrap>
-                                                            <span>A. {item.optionA}</span>
-                                                            <span>B. {item.optionB}</span>
-                                                            <span>C. {item.optionC}</span>
-                                                            <span>D. {item.optionD}</span>
-                                                        </Space>
-                                                    </div>
+                            <div style={{ padding: '24px', background: '#fff' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                                    <CheckCircleOutlined style={{ color: '#10B981', fontSize: 20 }} />
+                                    <span style={{ fontWeight: 700, fontSize: 15, color: '#334155' }}>Danh sách câu hỏi</span>
+                                </div>
+                                <List
+                                    grid={{ gutter: 20, column: 1 }}
+                                    dataSource={group.questions}
+                                    renderItem={(item) => (
+                                        <List.Item style={{ marginBottom: 16 }}>
+                                            <div style={{ 
+                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                                                padding: '16px', borderRadius: 12, background: '#F1F5F9',
+                                                border: '1px solid #E2E8F0',
+                                                transition: 'all 0.3s'
+                                            }} className="hover-item-shadow-light">
+                                                <div style={{ flex: 1 }}>
+                                                    <Space size="middle" align="start">
+                                                        <div style={{ 
+                                                            width: 28, height: 28, borderRadius: 6, 
+                                                            background: '#fff', border: '1px solid #CBD5E1',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            fontWeight: 700, color: '#475569', fontSize: 12
+                                                        }}>
+                                                            {item.questionNumber}
+                                                        </div>
+                                                        <div style={{ flex: 1 }}>
+                                                            <div dangerouslySetInnerHTML={{ __html: item.questionText || '' }} style={{ color: '#1E293B', fontWeight: 600, marginBottom: 8 }} />
+                                                            <Space size="large" wrap style={{ color: '#475569', fontSize: 13 }}>
+                                                                <span><Tag color="blue" style={{ borderRadius: 4, margin: 0 }}>A</Tag> {item.optionA}</span>
+                                                                <span><Tag color="blue" style={{ borderRadius: 4, margin: 0 }}>B</Tag> {item.optionB}</span>
+                                                                <span><Tag color="blue" style={{ borderRadius: 4, margin: 0 }}>C</Tag> {item.optionC}</span>
+                                                                <span><Tag color="blue" style={{ borderRadius: 4, margin: 0 }}>D</Tag> {item.optionD}</span>
+                                                            </Space>
+                                                        </div>
+                                                    </Space>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                    <Tag color="green" style={{ 
+                                                        fontWeight: 800, padding: '4px 12px', borderRadius: 6,
+                                                        border: '1px solid #10B981', background: '#ECFDF5' 
+                                                    }}>
+                                                         {item.correctAnswer}
+                                                    </Tag>
+                                                    <Button
+                                                        type="text"
+                                                        icon={<EditOutlined style={{ color: '#2563EB' }} />}
+                                                        style={{ background: '#EFF6FF', borderRadius: 8 }}
+                                                        onClick={() => {
+                                                            setEditingQuestion(item);
+                                                            editForm.setFieldsValue(item);
+                                                            setEditModalVisible(true);
+                                                        }}
+                                                    />
                                                 </div>
                                             </div>
-                                            <div>
-                                                <Space>
-                                                    <Tag color="green">{item.correctAnswer}</Tag>
-                                                    <Button type="link" icon={<EditOutlined />} onClick={() => {
-                                                        setEditingQuestion(item);
-                                                        editForm.setFieldsValue(item);
-                                                        setEditModalVisible(true);
-                                                    }}>Sửa</Button>
-                                                </Space>
-                                            </div>
-                                        </div>
-                                    </List.Item>
-                                )}
-                            />
-                        </div>
+                                        </List.Item>
+                                    )}
+                                />
+                            </div>
                     </Card>
-                ))}
+                    );
+                })}
             </div>
         );
     };
@@ -874,9 +867,13 @@ export default function PartDetail() {
                                 type="primary"
                                 icon={<PlusOutlined />}
                                 onClick={() => {
-                                    if (isPart6) setCreatePart6ModalVisible(true);
-                                    else if (part.partNumber === 7) setCreatePart7ModalVisible(true);
-                                    else if (part.partNumber === 1) setCreatePart1ModalVisible(true); // Part 1 specific modal
+                                    if (isPart6) {
+                                        setEditingGroup(null);
+                                        setCreatePart6ModalVisible(true);
+                                    } else if (part.partNumber === 7) {
+                                        setEditingGroup(null);
+                                        setCreatePart7ModalVisible(true);
+                                    } else if (part.partNumber === 1) setCreatePart1ModalVisible(true); // Part 1 specific modal
                                     else if (part.partNumber === 2) setCreatePart2ModalVisible(true); // Part 2 specific modal
                                     else setCreateModalVisible(true);
                                 }}
@@ -961,16 +958,26 @@ export default function PartDetail() {
 
             <CreatePart6Modal
                 open={createPart6ModalVisible}
-                onCancel={() => setCreatePart6ModalVisible(false)}
+                onCancel={() => {
+                    setCreatePart6ModalVisible(false);
+                    setEditingGroup(null);
+                }}
                 onSuccess={fetchQuestions}
                 partId={partId || null}
+                mode={editingGroup ? 'edit' : 'add'}
+                initialData={editingGroup}
             />
 
             <CreatePart7Modal
                 open={createPart7ModalVisible}
-                onCancel={() => setCreatePart7ModalVisible(false)}
+                onCancel={() => {
+                    setCreatePart7ModalVisible(false);
+                    setEditingGroup(null);
+                }}
                 onSuccess={fetchQuestions}
                 partId={partId || null}
+                mode={editingGroup ? 'edit' : 'add'}
+                initialData={editingGroup}
             />
 
             <CreatePart5BulkModal
@@ -1040,20 +1047,6 @@ export default function PartDetail() {
                             </Form.Item>
                         ))}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <span>Giải thích</span>
-                        <Button
-                            size="small"
-                            type="primary"
-                            ghost
-                            onClick={() => handleGenerateQuestionAI(createForm)}
-                        >
-                            Tạo lời giải AI
-                        </Button>
-                    </div>
-                    <Form.Item name="explanation" noStyle>
-                        <ReactQuill theme="snow" modules={quillModules} formats={quillFormats} />
-                    </Form.Item>
                 </Form>
             </Modal>
 
@@ -1098,97 +1091,6 @@ export default function PartDetail() {
                             </Form.Item>
                         ))}
                     </div>
-                    <Form.Item label="Giải thích" name="explanation">
-                        <ReactQuill theme="snow" modules={quillModules} formats={quillFormats} />
-                    </Form.Item>
-                </Form>
-            </Modal>
-
-            {/* Edit Passage Modal */}
-            <Modal
-                title="Chỉnh sửa Đoạn văn"
-                open={editPassageModalVisible}
-                onCancel={() => setEditPassageModalVisible(false)}
-                onOk={() => passageForm.submit()}
-                width={800}
-            >
-                <Form form={passageForm} layout="vertical" onFinish={handleUpdatePassage}>
-                    {part?.partNumber === 7 && (
-                        <Form.Item name="passageType" initialValue="both" style={{ marginBottom: 16 }}>
-                            <Radio.Group>
-                                <Radio.Button value="text">Văn bản</Radio.Button>
-                                <Radio.Button value="image">Hình ảnh</Radio.Button>
-                                <Radio.Button value="both">Cả hai</Radio.Button>
-                            </Radio.Group>
-                        </Form.Item>
-                    )}
-
-                    {/* Image Section - Show if 'image' or 'both' (or if not Part 7, never show? Actually Part 6 is text only usually) */}
-                    {(part?.partNumber === 7) && (
-                        <Form.Item
-                            noStyle
-                            shouldUpdate={(prevValues, currentValues) => prevValues.passageType !== currentValues.passageType}
-                        >
-                            {({ getFieldValue }) => {
-                                const type = getFieldValue('passageType');
-                                if (type === 'image' || type === 'both') {
-                                    return (
-                                        <Form.Item label="Hình ảnh đoạn văn" name="passageFiles">
-                                            <div style={{ marginBottom: 16 }}>
-                                                <Dragger
-                                                    fileList={editPassageFileList}
-                                                    multiple
-                                                    listType="picture-card"
-                                                    beforeUpload={(file) => {
-                                                        setEditPassageFileList(prev => [...prev, file]);
-                                                        return false;
-                                                    }}
-                                                    onRemove={(file) => {
-                                                        setEditPassageFileList(prev => {
-                                                            const index = prev.indexOf(file);
-                                                            const newFileList = prev.slice();
-                                                            newFileList.splice(index, 1);
-                                                            return newFileList;
-                                                        });
-                                                    }}
-                                                    accept="image/*"
-                                                >
-                                                    <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-                                                    <p className="ant-upload-text">Kéo thả hoặc chọn ảnh để cập nhật</p>
-                                                </Dragger>
-                                            </div>
-                                        </Form.Item>
-                                    );
-                                }
-                                return null;
-                            }}
-                        </Form.Item>
-                    )}
-
-                    {/* Text Section - Show if 'text' or 'both', AND always for Part 6 */}
-                    <Form.Item
-                        noStyle
-                        shouldUpdate={(prevValues, currentValues) => prevValues.passageType !== currentValues.passageType}
-                    >
-                        {({ getFieldValue }) => {
-                            const type = getFieldValue('passageType');
-                            // Always show for Part 6, or if Part 7 and type is text/both
-                            if (part?.partNumber !== 7 || type === 'text' || type === 'both') {
-                                return (
-                                    <Form.Item label="Nội dung văn bản" name="passage">
-                                        <ReactQuill
-                                            theme="snow"
-                                            modules={quillModules}
-                                            formats={quillFormats}
-                                            style={{ height: 300, marginBottom: 50 }}
-                                            placeholder="Nhập nội dung văn bản..."
-                                        />
-                                    </Form.Item>
-                                );
-                            }
-                            return null;
-                        }}
-                    </Form.Item>
                 </Form>
             </Modal>
 

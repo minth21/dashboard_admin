@@ -101,17 +101,14 @@ function App() {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#1E40AF', // Blue 800 - Premium Blue
-          colorPrimaryHover: '#1D4ED8', // Blue 700
+          colorPrimary: '#3B82F6', // Established Light Blue
+          colorPrimaryHover: '#2563EB',
           colorBgLayout: '#F8FAFC', // Slate 50 - Cleaner background
           colorBgContainer: '#FFFFFF',
-          colorText: '#0F172A', // Slate 900 - Better readability
-          colorTextSecondary: '#475569', // Slate 600
-          colorBorder: '#E2E8F0', // Slate 200 - Softer borders
-          colorSuccess: '#10B981',
-          colorWarning: '#F59E0B',
-          colorError: '#EF4444',
-          borderRadius: 16, // More modern generous rounding
+          colorText: '#0F172A', // Slate 900
+          colorTextSecondary: '#475569',
+          colorBorder: '#E2E8F0',
+          borderRadius: 20, // Modern generous rounding
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 20px 25px -5px rgba(0, 0, 0, 0.02)',
         },
         components: {

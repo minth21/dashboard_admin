@@ -51,6 +51,23 @@ export default function Dashboard() {
         }
     }, [location.pathname]);
 
+    // Role-Based Redirects & Route Guarding
+    useEffect(() => {
+        if (!user) return;
+        
+        const path = location.pathname;
+        
+        // Non-admins can't access Dashboard or User Management
+        if (user.role !== 'ADMIN') {
+            if (path === '/dashboard' || path === '/users' || path === '/') {
+                navigate('/exam-bank', { replace: true });
+                if (path !== '/') {
+                    message.warning('Bạn không có quyền truy cập trang này. Đã chuyển sang Ngân hàng đề.');
+                }
+            }
+        }
+    }, [location.pathname, user?.role, navigate]);
+
     const handleLogout = () => {
         localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_user');
@@ -92,13 +109,6 @@ export default function Dashboard() {
         return false; // Prevent default upload behavior
     };
 
-    // Redirect STAFF away from User Management
-    useEffect(() => {
-        if (location.pathname === '/users' && user?.role !== 'ADMIN') {
-            navigate('/dashboard');
-            message.warning('Bạn không có quyền truy cập trang này');
-        }
-    }, [location.pathname, user, navigate]);
 
     if (!user) return null;
 
@@ -164,7 +174,7 @@ export default function Dashboard() {
                         padding: '0 12px'
                     }}
                     items={[
-                        {
+                        ...(user?.role === 'ADMIN' ? [{
                             key: '1',
                             icon: <DashboardOutlined style={{ fontSize: 20 }} />,
                             label: <span style={{ fontWeight: 800 }}>Tổng quan</span>,
@@ -176,7 +186,7 @@ export default function Dashboard() {
                                 alignItems: 'center',
                                 fontSize: 15
                             },
-                        },
+                        }] : []),
                         ...(user?.role === 'ADMIN' ? [{
                             key: '2',
                             icon: <UserOutlined style={{ fontSize: 20 }} />,
