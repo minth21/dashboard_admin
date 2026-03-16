@@ -11,11 +11,12 @@ import {
     message,
     Tag,
     Space,
-    Descriptions, // Added
-    Popconfirm, // Added
+    Popconfirm,
     Select,
     Progress,
     Upload,
+    Row,
+    Col,
 } from 'antd';
 import {
     ArrowLeftOutlined,
@@ -24,6 +25,11 @@ import {
     DeleteOutlined,
     FileTextOutlined,
     UploadOutlined,
+    ClockCircleOutlined,
+    SafetyCertificateOutlined,
+    QuestionCircleOutlined,
+    PlusCircleOutlined,
+    BookOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { testApi, partApi, uploadApi } from '../services/api';
@@ -82,6 +88,9 @@ export default function TestDetail() {
     const [editingPart, setEditingPart] = useState<Part | null>(null);
     const [form] = Form.useForm();
     const [createForm] = Form.useForm();
+
+    // Cấu hình bóng đổ hiện đại
+    const modernShadow = '0 10px 30px -5px rgba(37, 99, 235, 0.08), 0 4px 10px -6px rgba(37, 99, 235, 0.04)';
 
     const [createInstructions, setCreateInstructions] = useState('');
     const [editInstructions, setEditInstructions] = useState('');
@@ -326,109 +335,145 @@ export default function TestDetail() {
 
     const columns: ColumnsType<Part> = [
         {
-            title: 'Part',
+            title: 'Số hiệu',
             dataIndex: 'partNumber',
             key: 'partNumber',
-            width: 100,
+            width: 120,
             align: 'center',
-            render: (partNumber) => `Part ${partNumber}`,
+            render: (num) => (
+                <div style={{
+                    background: '#F1F5F9',
+                    color: '#475569',
+                    display: 'inline-block',
+                    padding: '4px 12px',
+                    borderRadius: '8px',
+                    fontWeight: 800,
+                    fontSize: '13px',
+                    textAlign: 'center',
+                    border: '1px solid #E2E8F0'
+                }}>
+                    PART {num}
+                </div>
+            ),
         },
         {
-            title: 'Tên',
+            title: 'Tên phân đoạn',
             dataIndex: 'partName',
             key: 'partName',
             width: 250,
-            render: (partName) => partName.replace(/^Part \d+: /, ''),
+            align: 'center',
+            render: (name) => (
+                <div style={{ fontWeight: 700, color: '#1E3A8A', textAlign: 'center' }}>
+                    {name.replace(/^Part \d+: /, '')}
+                </div>
+            ),
         },
         {
-            title: 'Tổng số câu',
+            title: 'Tổng câu',
             dataIndex: 'totalQuestions',
             key: 'totalQuestions',
-            width: 120,
+            width: 100,
             align: 'center',
+            render: (total) => <span style={{ fontWeight: 700, color: '#64748B' }}>{total} câu</span>,
         },
         {
             title: 'Thời gian',
             dataIndex: 'timeLimit',
             key: 'timeLimit',
-            width: 150,
+            width: 140,
             align: 'center',
             render: (timeLimit) => {
-                if (!timeLimit) return '-';
-                const h = Math.floor(timeLimit / 3600);
-                const m = Math.floor((timeLimit % 3600) / 60);
+                if (!timeLimit) return <Tag>Không giới hạn</Tag>;
+                const m = Math.floor(timeLimit / 60);
                 const s = timeLimit % 60;
-
-                let result = '';
-                if (h > 0) result += `${h}h `;
-                if (m > 0) result += `${m}m `;
-                if (s > 0) result += `${s}s`;
-                return result.trim() || '0s';
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 600, color: '#10B981' }}>
+                        <ClockCircleOutlined style={{ fontSize: 13 }} />
+                        {m}:{s.toString().padStart(2, '0')}
+                    </div>
+                );
             },
         },
         {
-            title: 'Tiến độ',
+            title: 'Hoàn thiện',
             key: 'progress',
-            width: 200,
+            width: 180,
             align: 'center',
-            render: (_, record) => (
-                <div>
-                    <Progress
-                        percent={Math.round((record.completedQuestions / record.totalQuestions) * 100)}
-                        size="small"
-                        status={record.completedQuestions === record.totalQuestions ? 'success' : 'active'}
-                    />
-                    <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                        {record.completedQuestions}/{record.totalQuestions} câu hỏi
+            render: (_, record) => {
+                const percent = Math.round((record.completedQuestions / record.totalQuestions) * 100);
+                return (
+                    <div style={{ padding: '0 8px' }}>
+                        <Progress
+                            percent={percent}
+                            size="small"
+                            strokeColor={{
+                                '0%': '#3B82F6',
+                                '100%': '#10B981',
+                            }}
+                            status={percent === 100 ? 'success' : 'active'}
+                        />
+                        <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2, fontWeight: 600 }}>
+                            {record.completedQuestions} / {record.totalQuestions}
+                        </div>
                     </div>
-                </div>
-            ),
+                );
+            },
         },
         {
             title: 'Trạng thái',
             dataIndex: 'status',
             key: 'status',
-            width: 140,
+            width: 120,
             align: 'center',
-            render: (_, record) => (
-                <Tag color={record.status === 'ACTIVE' ? 'green' : 'red'}>
-                    {record.status === 'ACTIVE' ? 'Mở' : 'Khóa'}
-                </Tag>
+            render: (status) => (
+                <div style={{
+                    background: status === 'ACTIVE' ? '#ECFDF5' : '#FEF2F2',
+                    color: status === 'ACTIVE' ? '#059669' : '#DC2626',
+                    padding: '4px 10px',
+                    borderRadius: '20px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    fontWeight: 700,
+                    gap: 6,
+                    fontSize: '12px'
+                }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
+                    {status === 'ACTIVE' ? 'ĐANG MỞ' : 'KHÓA'}
+                </div>
             ),
         },
         {
-            title: 'Thao tác',
+            title: 'Hành động',
             key: 'actions',
-            width: 180,
+            width: 150,
             align: 'center',
+            fixed: 'right',
             render: (_, record) => (
                 <Space>
                     <Button
-                        type="default"
+                        type="text"
+                        style={{ color: '#3B82F6', background: '#EFF6FF', borderRadius: '8px' }}
                         icon={<FileTextOutlined />}
-                        size="small"
                         onClick={() => handleViewDetails(record)}
-                        title="Xem chi tiết & Import đề thi"
+                        title="Import câu hỏi"
                     />
                     <Button
-                        type="primary"
+                        type="text"
+                        style={{ color: '#059669', background: '#ECFDF5', borderRadius: '8px' }}
                         icon={<EditOutlined />}
-                        size="small"
                         onClick={() => handleEdit(record)}
                     />
                     <Popconfirm
-                        title="Xóa Part này?"
-                        description="Bạn có chắc chắn muốn xóa Part này không?"
+                        title="Xác nhận xóa Part?"
                         onConfirm={() => handleDelete(record.id)}
                         okText="Xóa"
                         cancelText="Hủy"
-                        okButtonProps={{ danger: true }}
                     >
                         <Button
-                            type="default"
+                            type="text"
                             danger
+                            style={{ background: '#FEF2F2', borderRadius: '8px' }}
                             icon={<DeleteOutlined />}
-                            size="small"
                         />
                     </Popconfirm>
                 </Space>
@@ -468,75 +513,184 @@ export default function TestDetail() {
     };
 
     return (
-        <div style={{ padding: 24 }}>
+        <div style={{ padding: '24px', background: '#F8FAFC', minHeight: '100vh' }}>
             {/* Header */}
-            <div style={{ marginBottom: 24 }}>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-                    <Button
-                        icon={<ArrowLeftOutlined />}
-                        onClick={() => navigate('/exam-bank')}
-                    >
-                        Quay lại
-                    </Button>
-                </div>
-
-                {test && (
-                    <Card>
-                        <Descriptions title="Thông tin đề thi" column={2}>
-                            <Descriptions.Item label="Tiêu đề">{test.title}</Descriptions.Item>
-                            <Descriptions.Item label="Loại bài">
-                                {test.testType === 'LISTENING' ? 'Listening' : 'Reading'}
-                            </Descriptions.Item>
-                            <Descriptions.Item label="Độ khó">
-                                <Tag color={test.difficulty === 'EASY' ? 'green' : test.difficulty === 'MEDIUM' ? 'orange' : 'red'}>
-                                    {getDifficultyLabel(test.difficulty)}
-                                </Tag>
-                            </Descriptions.Item>
-                            <Descriptions.Item label="Trạng thái">
-                                <Tag color={test.status === 'UNLOCKED' ? 'green' : 'red'}>
-                                    {test.status === 'UNLOCKED' ? 'Mở khóa' : 'Khóa'}
-                                </Tag>
-                            </Descriptions.Item>
-                            <Descriptions.Item label="Thời gian">{test.duration} phút</Descriptions.Item>
-                            <Descriptions.Item label="Tổng số câu">{test.totalQuestions} câu</Descriptions.Item>
-                        </Descriptions>
-                    </Card>
-                )}
+            <div style={{ marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Button
+                    size="large"
+                    icon={<ArrowLeftOutlined />}
+                    onClick={() => navigate('/exam-bank')}
+                    style={{ borderRadius: 12, fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                    Quay lại danh sách
+                </Button>
             </div>
+
+            {test && (
+                <Card
+                    style={{
+                        marginBottom: 32,
+                        borderRadius: 24,
+                        border: 'none',
+                        boxShadow: modernShadow,
+                        background: '#FFFFFF',
+                        overflow: 'hidden'
+                    }}
+                    bodyStyle={{ padding: 0 }}
+                >
+                    <div style={{
+                        background: 'linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 100%)',
+                        padding: '24px 32px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}>
+                        <Space size={16}>
+                            <div style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: 16,
+                                background: 'rgba(255, 255, 255, 0.1)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#FFF',
+                                fontSize: 28,
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                backdropFilter: 'blur(4px)',
+                            }}>
+                                <FileTextOutlined />
+                            </div>
+                            <div>
+                                <h2 style={{ margin: 0, color: '#FFFFFF', fontSize: 22, fontWeight: 700 }}>{test?.title}</h2>
+                                <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 14 }}>Mã đề: {test?.id}</div>
+                            </div>
+                        </Space>
+                        <Tag color={test?.status === 'UNLOCKED' ? 'success' : 'error'} style={{
+                            borderRadius: '30px',
+                            padding: '4px 16px',
+                            fontWeight: 700,
+                            border: 'none',
+                            fontSize: 13,
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                        }}>
+                            {test?.status === 'UNLOCKED' ? 'ĐANG MỞ' : 'ĐANG KHÓA'}
+                        </Tag>
+                    </div>
+
+                    <div style={{ padding: '32px' }}>
+                        <Row gutter={[40, 24]}>
+                            <Col xs={12} sm={6}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <span style={{ color: '#64748B', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Loại bài thi</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1E293B', fontWeight: 700, fontSize: 16 }}>
+                                        <QuestionCircleOutlined style={{ color: '#3B82F6' }} />
+                                        {test.testType === 'LISTENING' ? 'Listening' : 'Reading'}
+                                    </div>
+                                </div>
+                            </Col>
+                            <Col xs={12} sm={6}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <span style={{ color: '#64748B', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Độ khó</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1E293B', fontWeight: 700, fontSize: 16 }}>
+                                        <SafetyCertificateOutlined style={{ color: '#F59E0B' }} />
+                                        {test && getDifficultyLabel(test.difficulty)}
+                                    </div>
+                                </div>
+                            </Col>
+                            <Col xs={12} sm={6}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <span style={{ color: '#64748B', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Thời gian</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1E293B', fontWeight: 700, fontSize: 16 }}>
+                                        <ClockCircleOutlined style={{ color: '#10B981' }} />
+                                        {test.duration} phút
+                                    </div>
+                                </div>
+                            </Col>
+                            <Col xs={12} sm={6}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <span style={{ color: '#64748B', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Quy mô</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1E293B', fontWeight: 700, fontSize: 16 }}>
+                                        <BookOutlined style={{ color: '#8B5CF6' }} />
+                                        {test?.totalQuestions} câu hỏi
+                                    </div>
+                                </div>
+                            </Col>
+                        </Row>
+                    </div>
+                </Card>
+            )}
 
             {/* Parts Table */}
             <Card
-                title="Danh sách Parts"
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 8,
+                            background: '#F1F5F9',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#475569'
+                        }}>
+                            <PlusCircleOutlined />
+                        </div>
+                        <span style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>Cấu trúc đề thi</span>
+                    </div>
+                }
+                style={{
+                    borderRadius: 24,
+                    border: 'none',
+                    boxShadow: modernShadow,
+                    background: '#FFFFFF'
+                }}
                 extra={
-                    <Space>
+                    <Space size="middle">
                         {selectedPartIds.length > 0 && (
-                            <>
+                            <div style={{
+                                background: '#F1F5F9',
+                                padding: '4px 8px',
+                                borderRadius: '10px',
+                                display: 'flex',
+                                gap: 8
+                            }}>
                                 <Button
-                                    type="default"
+                                    type="text"
                                     onClick={handleBulkActivate}
-                                    disabled={selectedPartIds.length === 0}
+                                    style={{ color: '#059669', fontWeight: 600, fontSize: 13 }}
                                 >
-                                    Kích hoạt ({selectedPartIds.length})
+                                    Mở ({selectedPartIds.length})
                                 </Button>
                                 <Button
-                                    type="default"
+                                    type="text"
                                     danger
                                     onClick={handleBulkDeactivate}
-                                    disabled={selectedPartIds.length === 0}
+                                    style={{ fontWeight: 600, fontSize: 13 }}
                                 >
-                                    Vô hiệu hóa ({selectedPartIds.length})
+                                    Khóa ({selectedPartIds.length})
                                 </Button>
-                            </>
+                            </div>
                         )}
                         <Button
                             type="primary"
                             icon={<PlusOutlined />}
                             onClick={() => setCreateModalVisible(true)}
+                            size="large"
+                            style={{
+                                borderRadius: 12,
+                                fontWeight: 700,
+                                background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                                border: 'none',
+                                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
+                            }}
                         >
                             Tạo Part mới
                         </Button>
                     </Space>
                 }
+                bodyStyle={{ padding: 0 }}
             >
                 <Table
                     columns={columns}
@@ -548,12 +702,31 @@ export default function TestDetail() {
                         selectedRowKeys: selectedPartIds,
                         onChange: (selectedKeys) => setSelectedPartIds(selectedKeys as string[]),
                     }}
+                    style={{ borderRadius: '0 0 24px 24px' }}
                 />
             </Card>
 
             {/* Create Modal */}
             <Modal
-                title="Tạo Part mới"
+                title={
+                    <Space style={{ marginBottom: 8 }}>
+                        <div style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 18,
+                            boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
+                        }}>
+                            <PlusCircleOutlined />
+                        </div>
+                        <span style={{ fontSize: 20, color: '#1E293B', fontWeight: 800 }}>Tạo Part mới</span>
+                    </Space>
+                }
                 open={createModalVisible}
                 onCancel={() => {
                     setCreateModalVisible(false);
@@ -561,208 +734,274 @@ export default function TestDetail() {
                     setCreateInstructions('');
                 }}
                 onOk={() => createForm.submit()}
-                okText="Tạo"
-                cancelText="Hủy"
-                width={900}
+                okText="Tạo mới "
+                cancelText="Hủy bỏ"
+                width={850}
+                centered
+                okButtonProps={{
+                    style: {
+                        borderRadius: 10,
+                        background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                        border: 'none',
+                        height: 44,
+                        padding: '0 32px',
+                        fontWeight: 700,
+                        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                    }
+                }}
+                cancelButtonProps={{ style: { borderRadius: 10, height: 44 } }}
             >
                 <Form
                     form={createForm}
                     layout="vertical"
                     onFinish={handleCreatePart}
+                    style={{ marginTop: 24 }}
                 >
-                    <Form.Item
-                        label="Part"
-                        name="partNumber"
-                        rules={[{ required: true, message: 'Vui lòng chọn Part' }]}
-                    >
-                        <Select
-                            placeholder="Chọn Part"
-                            onChange={(value) => {
-                                const config = PART_CONFIG[value];
-                                if (config) {
-                                    createForm.setFieldsValue({
-                                        partName: config.name,
-                                        totalQuestions: config.totalQuestions,
-                                        timeLimitHours: Math.floor(config.timeLimit / 3600),
-                                        timeLimitMinutes: Math.floor((config.timeLimit % 3600) / 60),
-                                        timeLimitSeconds: config.timeLimit % 60,
-                                        orderIndex: value,
-                                    });
-                                }
-                            }}
-                        >
-                            {test?.testType?.toUpperCase() === 'LISTENING' ? (
-                                <>
-                                    <Option value={1}>{PART_CONFIG[1].name}</Option>
-                                    <Option value={2}>{PART_CONFIG[2].name}</Option>
-                                    <Option value={3}>{PART_CONFIG[3].name}</Option>
-                                    <Option value={4}>{PART_CONFIG[4].name}</Option>
-                                </>
-                            ) : (
-                                <>
-                                    <Option value={5}>{PART_CONFIG[5].name}</Option>
-                                    <Option value={6}>{PART_CONFIG[6].name}</Option>
-                                    <Option value={7}>{PART_CONFIG[7].name}</Option>
-                                </>
-                            )}
-                        </Select>
-                    </Form.Item>
+                    <Row gutter={24}>
+                        <Col span={12}>
+                            <Form.Item
+                                label={<span style={{ fontWeight: 600, color: '#475569' }}>Chọn số Part</span>}
+                                name="partNumber"
+                                rules={[{ required: true, message: 'Vui lòng chọn Part' }]}
+                            >
+                                <Select
+                                    size="large"
+                                    placeholder="Chọn Part"
+                                    style={{ borderRadius: 10 }}
+                                    prefix={<QuestionCircleOutlined style={{ color: '#94A3B8' }} />}
+                                    onChange={(value) => {
+                                        const config = PART_CONFIG[value];
+                                        if (config) {
+                                            createForm.setFieldsValue({
+                                                partName: config.name,
+                                                totalQuestions: config.totalQuestions,
+                                                timeLimitHours: Math.floor(config.timeLimit / 3600),
+                                                timeLimitMinutes: Math.floor((config.timeLimit % 3600) / 60),
+                                                timeLimitSeconds: config.timeLimit % 60,
+                                                orderIndex: value,
+                                            });
+                                        }
+                                    }}
+                                >
+                                    {test?.testType?.toUpperCase() === 'LISTENING' ? (
+                                        <>
+                                            <Option value={1}>{PART_CONFIG[1].name}</Option>
+                                            <Option value={2}>{PART_CONFIG[2].name}</Option>
+                                            <Option value={3}>{PART_CONFIG[3].name}</Option>
+                                            <Option value={4}>{PART_CONFIG[4].name}</Option>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Option value={5}>{PART_CONFIG[5].name}</Option>
+                                            <Option value={6}>{PART_CONFIG[6].name}</Option>
+                                            <Option value={7}>{PART_CONFIG[7].name}</Option>
+                                        </>
+                                    )}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                label={<span style={{ fontWeight: 600, color: '#475569' }}>Tổng số câu hỏi</span>}
+                                name="totalQuestions"
+                                rules={[
+                                    { required: true, message: 'Vui lòng nhập số câu hỏi' },
+                                    { type: 'number', min: 1, message: 'Số câu hỏi phải lớn hơn 0' }
+                                ]}
+                            >
+                                <InputNumber size="large" min={1} prefix={<BookOutlined style={{ color: '#94A3B8' }} />} style={{ width: '100%', borderRadius: 10 }} />
+                            </Form.Item>
+                        </Col>
+                    </Row>
 
                     {/* Hidden field for partName - auto-filled */}
                     <Form.Item name="partName" hidden>
                         <Input />
                     </Form.Item>
 
-                    <Form.Item
-                        label="Tổng số câu hỏi"
-                        name="totalQuestions"
-                        rules={[
-                            { required: true, message: 'Vui lòng nhập số câu hỏi' },
-                            { type: 'number', min: 1, message: 'Số câu hỏi phải lớn hơn 0' }
-                        ]}
-                    >
-                        <InputNumber min={1} style={{ width: '100%' }} />
-                    </Form.Item>
-
-                    <Form.Item label="Thời gian làm bài" required style={{ marginBottom: 0 }}>
-                        <Space align="baseline" style={{ display: 'flex' }}>
-                            <Form.Item
-                                name="timeLimitMinutes"
-                                rules={[{ type: 'number', min: 0 }]}
-                                initialValue={0}
-                            >
-                                <InputNumber min={0} style={{ width: 80 }} addonAfter="phút" />
+                    <Row gutter={24}>
+                        <Col span={12}>
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Thời gian giới hạn</span>} required>
+                                <Space align="baseline" style={{ display: 'flex' }}>
+                                    <Form.Item
+                                        name="timeLimitMinutes"
+                                        rules={[{ type: 'number', min: 0 }]}
+                                        initialValue={0}
+                                    >
+                                        <InputNumber size="large" min={0} style={{ width: 120, borderRadius: 10 }} addonAfter="phút" />
+                                    </Form.Item>
+                                    <Form.Item
+                                        name="timeLimitSeconds"
+                                        rules={[{ type: 'number', min: 0, max: 59 }]}
+                                        initialValue={0}
+                                    >
+                                        <InputNumber size="large" min={0} max={59} style={{ width: 120, borderRadius: 10 }} addonAfter="giây" />
+                                    </Form.Item>
+                                </Space>
                             </Form.Item>
-                            <Form.Item
-                                name="timeLimitSeconds"
-                                rules={[{ type: 'number', min: 0, max: 59 }]}
-                                initialValue={0}
-                            >
-                                <InputNumber min={0} max={59} style={{ width: 80 }} addonAfter="giây" />
+                        </Col>
+                        <Col span={12}>
+                            {/* Hidden field for orderIndex */}
+                            <Form.Item name="orderIndex" hidden>
+                                <InputNumber />
                             </Form.Item>
-                        </Space>
-                    </Form.Item>
+                        </Col>
+                    </Row>
 
-                    <Form.Item label="Hướng dẫn (bắt buộc)" required>
-                        {renderInstructionsField(true)}
-                    </Form.Item>
-
-                    {/* Hidden field for orderIndex - auto-filled */}
-                    <Form.Item name="orderIndex" hidden>
-                        <InputNumber />
+                    <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Hướng dẫn làm bài (bắt buộc)</span>} required>
+                        <div style={{ padding: '4px', border: '1px solid #E2E8F0', borderRadius: 12 }}>
+                            {renderInstructionsField(true)}
+                        </div>
                     </Form.Item>
                 </Form>
             </Modal>
 
             {/* Edit Modal */}
             <Modal
-                title="Chỉnh sửa Part"
+                title={
+                    <Space style={{ marginBottom: 8 }}>
+                        <div style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 18,
+                            boxShadow: '0 4px 10px rgba(16, 185, 129, 0.2)'
+                        }}>
+                            <EditOutlined />
+                        </div>
+                        <span style={{ fontSize: 20, color: '#1E293B', fontWeight: 800 }}>Chỉnh sửa Part</span>
+                    </Space>
+                }
                 open={editModalVisible}
                 onCancel={() => {
                     setEditModalVisible(false);
                     setEditingPart(null);
                     setEditInstructions('');
                     form.resetFields();
-                    setEditPartAudioFileList([]); // Clear audio file list on cancel
+                    setEditPartAudioFileList([]);
                 }}
                 onOk={() => form.submit()}
-                okText="Lưu"
-                cancelText="Hủy"
-                width={900}
+                okText="Cập nhật thông tin"
+                cancelText="Hủy bỏ"
+                width={850}
+                centered
+                okButtonProps={{
+                    style: {
+                        borderRadius: 10,
+                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                        border: 'none',
+                        height: 44,
+                        padding: '0 32px',
+                        fontWeight: 700,
+                        boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                    }
+                }}
+                cancelButtonProps={{ style: { borderRadius: 10, height: 44 } }}
             >
                 <Form
                     form={form}
                     layout="vertical"
                     onFinish={handleUpdatePart}
+                    style={{ marginTop: 24 }}
                 >
-                    <Form.Item
-                        label="Part"
-                        name="partNumber"
-                        rules={[{ required: true, message: 'Vui lòng chọn Part' }]}
-                    >
-                        <Select placeholder="Chọn Part" disabled>
-                            <Option value={1}>{PART_CONFIG[1].name}</Option>
-                            <Option value={2}>{PART_CONFIG[2].name}</Option>
-                            <Option value={3}>{PART_CONFIG[3].name}</Option>
-                            <Option value={4}>{PART_CONFIG[4].name}</Option>
-                            <Option value={5}>{PART_CONFIG[5].name}</Option>
-                            <Option value={6}>{PART_CONFIG[6].name}</Option>
-                            <Option value={7}>{PART_CONFIG[7].name}</Option>
-                        </Select>
-                    </Form.Item>
-
-                    {/* Hidden field for partName */}
-                    <Form.Item name="partName" hidden>
-                        <Input />
-                    </Form.Item>
-
-                    <Form.Item
-                        label="Tổng số câu hỏi"
-                        name="totalQuestions"
-                        rules={[
-                            { required: true, message: 'Vui lòng nhập số câu hỏi' },
-                            { type: 'number', min: 1, message: 'Số câu hỏi phải lớn hơn 0' }
-                        ]}
-                    >
-                        <InputNumber min={1} style={{ width: '100%' }} />
-                    </Form.Item>
-
-                    <Form.Item label="Thời gian làm bài" required style={{ marginBottom: 0 }}>
-                        <Space align="baseline" style={{ display: 'flex' }}>
+                    <Row gutter={24}>
+                        <Col span={12}>
                             <Form.Item
-                                name="timeLimitMinutes"
-                                rules={[{ type: 'number', min: 0 }]}
+                                label={<span style={{ fontWeight: 600, color: '#475569' }}>Số Part</span>}
+                                name="partNumber"
+                                rules={[{ required: true, message: 'Vui lòng chọn Part' }]}
                             >
-                                <InputNumber min={0} style={{ width: 80 }} addonAfter="phút" />
+                                <Select size="large" placeholder="Chọn Part" disabled style={{ borderRadius: 10 }}>
+                                    <Option value={1}>{PART_CONFIG[1].name}</Option>
+                                    <Option value={2}>{PART_CONFIG[2].name}</Option>
+                                    <Option value={3}>{PART_CONFIG[3].name}</Option>
+                                    <Option value={4}>{PART_CONFIG[4].name}</Option>
+                                    <Option value={5}>{PART_CONFIG[5].name}</Option>
+                                    <Option value={6}>{PART_CONFIG[6].name}</Option>
+                                    <Option value={7}>{PART_CONFIG[7].name}</Option>
+                                </Select>
                             </Form.Item>
+                        </Col>
+                        <Col span={12}>
                             <Form.Item
-                                name="timeLimitSeconds"
-                                rules={[{ type: 'number', min: 0, max: 59 }]}
+                                label={<span style={{ fontWeight: 600, color: '#475569' }}>Tổng số câu hỏi</span>}
+                                name="totalQuestions"
+                                rules={[
+                                    { required: true, message: 'Vui lòng nhập số câu hỏi' },
+                                    { type: 'number', min: 1, message: 'Số câu hỏi phải lớn hơn 0' }
+                                ]}
                             >
-                                <InputNumber min={0} max={59} style={{ width: 80 }} addonAfter="giây" />
+                                <InputNumber size="large" min={1} prefix={<BookOutlined style={{ color: '#94A3B8' }} />} style={{ width: '100%', borderRadius: 10 }} />
                             </Form.Item>
-                        </Space>
-                    </Form.Item>
+                        </Col>
+                    </Row>
 
-                    <Form.Item label="Hướng dẫn (bắt buộc)" required>
-                        <div style={{ marginBottom: 50, height: 280 }}>
+                    <Row gutter={24}>
+                        <Col span={12}>
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Thời gian giới hạn</span>} required>
+                                <Space align="baseline" style={{ display: 'flex' }}>
+                                    <Form.Item
+                                        name="timeLimitMinutes"
+                                        rules={[{ type: 'number', min: 0 }]}
+                                    >
+                                        <InputNumber size="large" min={0} style={{ width: 120, borderRadius: 10 }} addonAfter="phút" />
+                                    </Form.Item>
+                                    <Form.Item
+                                        name="timeLimitSeconds"
+                                        rules={[{ type: 'number', min: 0, max: 59 }]}
+                                    >
+                                        <InputNumber size="large" min={0} max={59} style={{ width: 120, borderRadius: 10 }} addonAfter="giây" />
+                                    </Form.Item>
+                                </Space>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="status" label={<span style={{ fontWeight: 600, color: '#475569' }}>Trạng thái</span>} initialValue="ACTIVE">
+                                <Select size="large" style={{ borderRadius: 10 }}>
+                                    <Option value="ACTIVE">Mở (Hoạt động)</Option>
+                                    <Option value="INACTIVE">Khóa (Tạm dừng)</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    {/* Audio Upload - Only for Listening Parts (1-4) */}
+                    {editingPart && editingPart.partNumber >= 1 && editingPart.partNumber <= 4 && (
+                        <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Audio tập tin</span>}>
+                            <div style={{ padding: '16px', background: '#F8FAFC', borderRadius: 12, border: '1px dashed #CBD5E1' }}>
+                                <Upload
+                                    fileList={editPartAudioFileList}
+                                    beforeUpload={(file) => {
+                                        setEditPartAudioFileList([file]);
+                                        return false;
+                                    }}
+                                    onRemove={() => setEditPartAudioFileList([])}
+                                    maxCount={1}
+                                    accept="audio/*"
+                                >
+                                    <Button size="large" icon={<UploadOutlined />} style={{ borderRadius: 8 }}>Chọn tệp Audio mới</Button>
+                                </Upload>
+                            </div>
+                        </Form.Item>
+                    )}
+
+                    <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Hướng dẫn làm bài (bắt buộc)</span>} required>
+                        <div style={{ padding: '4px', border: '1px solid #E2E8F0', borderRadius: 12 }}>
                             <InstructionEditor
                                 value={editInstructions}
                                 onChange={setEditInstructions}
-                                style={{ height: '100%' }}
                             />
                         </div>
                     </Form.Item>
 
-                    {/* Audio Upload - Only for Listening Parts (1-4) */}
-                    {editingPart && editingPart.partNumber >= 1 && editingPart.partNumber <= 4 && (
-                        <Form.Item label="Audio">
-                            <Upload
-                                fileList={editPartAudioFileList}
-                                beforeUpload={(file) => {
-                                    setEditPartAudioFileList([file]);
-                                    return false;
-                                }}
-                                onRemove={() => setEditPartAudioFileList([])}
-                                maxCount={1}
-                                accept="audio/*"
-                            >
-                                <Button icon={<UploadOutlined />}>Upload audio</Button>
-                            </Upload>
-                        </Form.Item>
-                    )}
-
-                    <Form.Item name="status" label="Trạng thái" initialValue="ACTIVE">
-                        <Select>
-                            <Option value="ACTIVE">Mở</Option>
-                            <Option value="INACTIVE">Khóa</Option>
-                        </Select>
-                    </Form.Item>
-
-                    {/* Hidden field for orderIndex */}
-                    <Form.Item name="orderIndex" hidden>
-                        <InputNumber />
-                    </Form.Item>
+                    {/* Hidden fields */}
+                    <Form.Item name="partName" hidden><Input /></Form.Item>
+                    <Form.Item name="orderIndex" hidden><InputNumber /></Form.Item>
                 </Form>
             </Modal>
         </div >

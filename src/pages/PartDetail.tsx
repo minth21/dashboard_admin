@@ -33,7 +33,9 @@ import {
     DownloadOutlined,
     BookOutlined,
     TranslationOutlined,
-    CheckCircleOutlined
+    CheckCircleOutlined,
+    ClockCircleOutlined,
+    PlusCircleOutlined,
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
@@ -80,7 +82,7 @@ interface Part {
 }
 
 const { Option } = Select;
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const modernShadow = '0 10px 30px -5px rgba(37, 99, 235, 0.08), 0 4px 10px -6px rgba(37, 99, 235, 0.04)';
 
@@ -301,7 +303,7 @@ export default function PartDetail() {
 
             // Only add Passage column for Parts 6 & 7
             if (partNum === 6 || partNum === 7) {
-                row['Đoạn văn (Part 6/7)'] = '';
+                row['Nội dung (Part 6/7)'] = '';
             }
 
             rows.push(row);
@@ -473,31 +475,37 @@ export default function PartDetail() {
         return (
             <div style={{ marginTop: 16 }}>
                 {groups.map((group, index) => {
-                    // Trích xuất dữ liệu dịch từ AI (lấy từ câu hỏi đầu tiên của nhóm)
                     let aiTranslations: any[] = [];
+                    let vocabulary: any[] = [];
+                    let aiQuestionsInfo: any[] = [];
+                    
                     const firstQ = group.questions[0];
                     if (firstQ?.passageTranslationData) {
                         try {
                             const raw = JSON.parse(firstQ.passageTranslationData);
-                            aiTranslations = Array.isArray(raw) 
-                                ? raw 
-                                : (raw.passages || raw.passageTranslations || []);
+                            if (Array.isArray(raw)) {
+                                aiTranslations = raw;
+                            } else {
+                                aiTranslations = raw.passages || raw.passageTranslations || [];
+                                vocabulary = raw.vocabulary || [];
+                                aiQuestionsInfo = raw.questions || [];
+                            }
                         } catch (e) {
                             console.error('Lỗi parse AI translations:', e);
                         }
                     }
 
                     return (
-                        <Card 
-                            key={index} 
-                            hoverable
-                            style={{ 
-                                marginBottom: 32, 
-                                borderRadius: 16, 
+                        <Card
+                            key={index}
+                            style={{
+                                marginBottom: 32,
+                                borderRadius: 24,
                                 overflow: 'hidden',
                                 boxShadow: modernShadow,
-                                border: 'none'
-                            }} 
+                                border: 'none',
+                                background: '#FFFFFF'
+                            }}
                             bodyStyle={{ padding: 0 }}
                         >
                             <div style={{
@@ -525,12 +533,12 @@ export default function PartDetail() {
                                                 });
                                             }}
                                         />
-                                        <div style={{ 
+                                        <div style={{
                                             padding: '4px 12px', background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
                                             borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 13,
                                             boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
                                         }}>
-                                            {isListeningGroup ? `Bài nghe ${index + 1}` : `Đoạn văn ${index + 1}`}
+                                            {isListeningGroup ? `Bài nghe ${index + 1}` : `Nội dung  ${index + 1}`}
                                         </div>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -540,11 +548,11 @@ export default function PartDetail() {
                                             </div>
                                         )}
                                         {!isListeningGroup && (
-                                            <Button 
-                                                size="middle" 
-                                                type="primary" 
-                                                ghost 
-                                                icon={<EditOutlined />} 
+                                            <Button
+                                                size="middle"
+                                                type="primary"
+                                                ghost
+                                                icon={<EditOutlined />}
                                                 style={{ borderRadius: 8, fontWeight: 600 }}
                                                 onClick={() => {
                                                     setEditingGroup({
@@ -599,44 +607,82 @@ export default function PartDetail() {
                                                 <TranslationOutlined style={{ color: '#7C3AED', fontSize: 18 }} />
                                                 <span style={{ fontWeight: 600, color: '#475569' }}>Bản dịch AI (Premium)</span>
                                             </div>
-                                            <div style={{ 
-                                                maxHeight: 500, 
-                                                overflowY: 'auto', 
-                                                background: 'linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%)', 
-                                                padding: 16, 
-                                                borderRadius: 12, 
+                                            <div style={{
+                                                maxHeight: 500,
+                                                overflowY: 'auto',
+                                                background: 'linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%)',
+                                                padding: 16,
+                                                borderRadius: 12,
                                                 border: '1px solid #DDD6FE',
                                                 boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
                                             }}>
                                                 {aiTranslations.length > 0 ? (
-                                                    aiTranslations.map((p: any, pIdx: number) => (
-                                                        <div key={pIdx} style={{ marginBottom: 20 }}>
-                                                            <div style={{ 
-                                                                display: 'flex', alignItems: 'center', gap: 8, 
-                                                                marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid #EDE9FE' 
-                                                            }}>
-                                                                <div style={{ width: 4, height: 16, background: '#8B5CF6', borderRadius: 2 }} />
-                                                                <Text strong style={{ color: '#5B21B6', fontSize: 14 }}>
-                                                                    {p.label || `Đoạn ${pIdx + 1}`}
-                                                                </Text>
-                                                            </div>
-                                                            {(p.items || p.sentences || []).map((s: any, sIdx: number) => (
-                                                                <div key={sIdx} style={{ 
-                                                                    marginBottom: 12, padding: '8px 12px', background: 'rgba(255,255,255,0.5)',
-                                                                    borderRadius: 8, border: '1px solid rgba(139, 92, 246, 0.1)'
+                                                    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                                                        {aiTranslations.map((p: any, pIdx: number) => (
+                                                            <div key={pIdx} style={{ marginBottom: 12 }}>
+                                                                <div style={{
+                                                                    display: 'flex', alignItems: 'center', gap: 8,
+                                                                    marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid #EDE9FE'
                                                                 }}>
-                                                                    <div style={{ color: '#1E293B', fontSize: 13, fontWeight: 500 }}>{s.en}</div>
-                                                                    <div style={{ color: '#6D28D9', fontSize: 13, fontStyle: 'italic', marginTop: 4, opacity: 0.9 }}>
-                                                                        → {s.vi}
-                                                                    </div>
+                                                                    <div style={{ width: 4, height: 16, background: '#8B5CF6', borderRadius: 2 }} />
+                                                                    <Text strong style={{ color: '#5B21B6', fontSize: 13 }}>
+                                                                        {p.label || `Đoạn ${pIdx + 1}`}
+                                                                    </Text>
                                                                 </div>
-                                                            ))}
-                                                        </div>
-                                                    ))
+                                                                {(p.items || p.sentences || []).map((s: any, sIdx: number) => (
+                                                                    <div key={sIdx} style={{
+                                                                        marginBottom: 8, padding: '8px 12px', background: 'rgba(255,255,255,0.5)',
+                                                                        borderRadius: 8, border: '1px solid rgba(139, 92, 246, 0.1)'
+                                                                    }}>
+                                                                        <div style={{ color: '#1E293B', fontSize: 13, fontWeight: 500 }}>{s.en}</div>
+                                                                        <div style={{ color: '#6D28D9', fontSize: 13, fontStyle: 'italic', marginTop: 4, opacity: 0.9 }}>
+                                                                            → {s.vi}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ))}
+
+                                                        {/* Vocabulary Section - Synchronized from Part 6 to 7 */}
+                                                        {vocabulary.length > 0 && (
+                                                            <div style={{ marginTop: 8, paddingTop: 16, borderTop: '2px dashed #DDD6FE' }}>
+                                                                <div style={{ marginBottom: 12, color: '#059669', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                    <BookOutlined style={{ color: '#10B981' }} /> TỪ VỰNG QUAN TRỌNG
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                                                    {vocabulary.map((v: any, i: number) => (
+                                                                        <Tag key={i} color="green" style={{ borderRadius: 6, margin: 0, padding: '2px 8px' }}>
+                                                                            <b>{v.word || v.text}</b>: {v.meaning}
+                                                                        </Tag>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Analysis Section */}
+                                                        {aiQuestionsInfo.length > 0 && (
+                                                            <div style={{ marginTop: 8, paddingTop: 16, borderTop: '2px dashed #DDD6FE' }}>
+                                                                <div style={{ marginBottom: 12, color: '#1E40AF', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                    <CheckCircleOutlined style={{ color: '#2563EB' }} /> PHÂN TÍCH CÂU HỎI
+                                                                </div>
+                                                                <Space direction="vertical" style={{ width: '100%' }} size="small">
+                                                                    {aiQuestionsInfo.map((aq: any, i: number) => (
+                                                                        <div key={i} style={{ padding: '10px 14px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                                                                            <div style={{ fontWeight: 800, color: '#1E3A8A', fontSize: 12, marginBottom: 4 }}>CÂU {aq.questionNumber}</div>
+                                                                            <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
+                                                                                {aq.analysis && <div><span style={{ color: '#6366F1', fontWeight: 700 }}>●</span> {aq.analysis}</div>}
+                                                                                {aq.evidence && <div style={{ marginTop: 4, color: '#059669', fontStyle: 'italic' }}><span style={{ color: '#10B981', fontWeight: 700 }}>🔍</span> {aq.evidence}</div>}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </Space>
+                                                            </div>
+                                                        )}
+                                                    </Space>
                                                 ) : (
-                                                    <Empty 
-                                                        image={Empty.PRESENTED_IMAGE_SIMPLE} 
-                                                        description={<span style={{ fontSize: 12, color: '#94A3B8' }}>Chưa có bản dịch AI</span>} 
+                                                    <Empty
+                                                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                                        description={<span style={{ fontSize: 12, color: '#94A3B8' }}>Chưa có bản dịch AI</span>}
                                                         style={{ margin: '60px 0' }}
                                                     />
                                                 )}
@@ -655,16 +701,16 @@ export default function PartDetail() {
                                     dataSource={group.questions}
                                     renderItem={(item) => (
                                         <List.Item style={{ marginBottom: 16 }}>
-                                            <div style={{ 
-                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                                            <div style={{
+                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                                 padding: '16px', borderRadius: 12, background: '#F1F5F9',
                                                 border: '1px solid #E2E8F0',
                                                 transition: 'all 0.3s'
                                             }} className="hover-item-shadow-light">
                                                 <div style={{ flex: 1 }}>
                                                     <Space size="middle" align="start">
-                                                        <div style={{ 
-                                                            width: 28, height: 28, borderRadius: 6, 
+                                                        <div style={{
+                                                            width: 28, height: 28, borderRadius: 6,
                                                             background: '#fff', border: '1px solid #CBD5E1',
                                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                             fontWeight: 700, color: '#475569', fontSize: 12
@@ -683,11 +729,11 @@ export default function PartDetail() {
                                                     </Space>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                    <Tag color="green" style={{ 
+                                                    <Tag color="green" style={{
                                                         fontWeight: 800, padding: '4px 12px', borderRadius: 6,
-                                                        border: '1px solid #10B981', background: '#ECFDF5' 
+                                                        border: '1px solid #10B981', background: '#ECFDF5'
                                                     }}>
-                                                         {item.correctAnswer}
+                                                        {item.correctAnswer}
                                                     </Tag>
                                                     <Button
                                                         type="text"
@@ -705,7 +751,7 @@ export default function PartDetail() {
                                     )}
                                 />
                             </div>
-                    </Card>
+                        </Card>
                     );
                 })}
             </div>
@@ -793,22 +839,65 @@ export default function PartDetail() {
             dataIndex: 'correctAnswer',
             align: 'center',
             width: 100,
-            render: (text) => <Tag color="green">{text}</Tag>
+            render: (text) => (
+                <div style={{
+                    background: '#ECFDF5',
+                    color: '#059669',
+                    padding: '4px 12px',
+                    borderRadius: '8px',
+                    fontWeight: 800,
+                    display: 'inline-block',
+                    border: '1px solid #10B981',
+                    fontSize: '13px'
+                }}>
+                    {text}
+                </div>
+            )
         },
         {
-            title: 'Thao tác',
+            title: 'Hành động',
             align: 'center',
-            width: 100,
+            key: 'actions',
+            width: 120,
             render: (_, record) => (
-                <Button type="link" icon={<EditOutlined />} onClick={() => {
-                    setEditingQuestion(record);
-                    if (part?.partNumber === 1) {
-                        setEditPart1ModalVisible(true);
-                    } else {
-                        editForm.setFieldsValue(record);
-                        setEditModalVisible(true);
-                    }
-                }}>Sửa</Button>
+                <Space>
+                    <Button
+                        type="text"
+                        icon={<EditOutlined />}
+                        style={{ color: '#2563EB', background: '#EFF6FF', borderRadius: '8px' }}
+                        onClick={() => {
+                            setEditingQuestion(record);
+                            if (part?.partNumber === 1) {
+                                setEditPart1ModalVisible(true);
+                            } else {
+                                editForm.setFieldsValue(record);
+                                setEditModalVisible(true);
+                            }
+                        }}
+                    />
+                    <Popconfirm
+                        title="Xác nhận xóa câu hỏi này?"
+                        onConfirm={async () => {
+                            try {
+                                await questionApi.delete(record.id);
+                                message.success('Đã xóa câu hỏi');
+                                fetchQuestions();
+                            } catch (error) {
+                                message.error('Lỗi khi xóa câu hỏi');
+                            }
+                        }}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                        okButtonProps={{ danger: true }}
+                    >
+                        <Button
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            style={{ background: '#FEF2F2', borderRadius: '8px' }}
+                        />
+                    </Popconfirm>
+                </Space>
             )
         }
     ];
@@ -819,50 +908,116 @@ export default function PartDetail() {
         <div style={{ padding: 24 }}>
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
                 {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Space direction="vertical" size="small">
-                        <Title level={3} style={{ margin: 0 }}>{part.partName}</Title>
+                <div style={{ marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Space direction="vertical" size={0}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+                            <div style={{
+                                padding: '4px 12px',
+                                background: 'linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 100%)',
+                                borderRadius: '8px',
+                                color: '#FFF',
+                                fontWeight: 800,
+                                fontSize: '12px',
+                                boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
+                            }}>
+                                PART {part?.partNumber}
+                            </div>
+                            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#1E293B' }}>
+                                {part?.partName?.replace(/^Part \d+: /, '')}
+                            </h1>
+                        </div>
+                        <p style={{ margin: 0, color: '#64748B', fontSize: 15 }}>Quản lý chi tiết câu hỏi và nộ dung của phần thi này.</p>
                     </Space>
-                    <Space>
-                        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/exam-bank/${testId}`)}>
-                            Quay lại
-                        </Button>
-                    </Space>
+                    <Button
+                        size="large"
+                        icon={<ArrowLeftOutlined />}
+                        onClick={() => navigate(`/exam-bank/${testId}`)}
+                        style={{ borderRadius: 12, fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: 8 }}
+                    >
+                        Quay lại
+                    </Button>
                 </div>
 
-                {/* Part Audio Player (Common for all questions) - Only for Listening Parts (1-4) */}
-                {(part.partNumber >= 1 && part.partNumber <= 4) && (
-                    <Card size="small" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1 }}>
-                                <span style={{ fontWeight: 500, color: '#389e0d' }}>Audio:</span>
-                                {part.audioUrl ? (
-                                    <div style={{ flex: 1 }}>
-                                        <AudioPlayer src={part.audioUrl} />
-                                    </div>
-                                ) : (
-                                    <span style={{ color: '#888', fontStyle: 'italic' }}>Chưa có file nghe chung cho phần này</span>
-                                )}
+                {/* Part Audio Player Section */}
+                {(part?.partNumber >= 1 && part?.partNumber <= 4) && (
+                    <Card
+                        style={{
+                            marginBottom: 24,
+                            borderRadius: 20,
+                            border: 'none',
+                            boxShadow: modernShadow,
+                            background: '#FFFFFF',
+                            overflow: 'hidden'
+                        }}
+                        bodyStyle={{ padding: '20px 24px' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 20, flex: 1 }}>
+                                <div style={{
+                                    width: 48,
+                                    height: 48,
+                                    borderRadius: 14,
+                                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#FFF',
+                                    fontSize: 20,
+                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                                }}>
+                                    <ClockCircleOutlined />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 700, color: '#1E293B', fontSize: 16, marginBottom: 4 }}>File nghe của Part {part?.partNumber}</div>
+                                    {part?.audioUrl ? (
+                                        <div style={{ maxWidth: 400 }}>
+                                            <AudioPlayer src={part.audioUrl} />
+                                        </div>
+                                    ) : (
+                                        <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: 13 }}>Chưa có file nghe chung cho phần này</span>
+                                    )}
+                                </div>
                             </div>
-                            <div>
-                                <Upload
-                                    beforeUpload={handlePartAudioUpload}
-                                    showUploadList={false}
-                                    accept="audio/*"
+                            <Upload
+                                beforeUpload={handlePartAudioUpload}
+                                showUploadList={false}
+                                accept="audio/*"
+                            >
+                                <Button
+                                    icon={<UploadOutlined />}
+                                    type="primary"
+                                    size="large"
+                                    style={{
+                                        borderRadius: 12,
+                                        fontWeight: 700,
+                                        background: part?.audioUrl ? '#F1F5F9' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                                        color: part?.audioUrl ? '#475569' : '#FFF',
+                                        border: 'none',
+                                        boxShadow: part?.audioUrl ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)',
+                                        height: 48,
+                                        padding: '0 24px'
+                                    }}
                                 >
-                                    <Button icon={<UploadOutlined />} type={part.audioUrl ? 'default' : 'primary'}>
-                                        {part.audioUrl ? 'Upload Audio' : 'Upload Audio'}
-                                    </Button>
-                                </Upload>
-                            </div>
+                                    {part?.audioUrl ? 'Thay đổi Audio' : 'Tải lên Audio'}
+                                </Button>
+                            </Upload>
                         </div>
                     </Card>
                 )}
 
                 {/* Toolbar */}
-                <Card bodyStyle={{ padding: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Space>
+                <Card
+                    style={{
+                        marginBottom: 24,
+                        borderRadius: 20,
+                        border: 'none',
+                        boxShadow: modernShadow,
+                        background: '#FFFFFF'
+                    }}
+                    bodyStyle={{ padding: '16px 24px' }}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Space size="middle">
                             <Button
                                 type="primary"
                                 icon={<PlusOutlined />}
@@ -870,18 +1025,33 @@ export default function PartDetail() {
                                     if (isPart6) {
                                         setEditingGroup(null);
                                         setCreatePart6ModalVisible(true);
-                                    } else if (part.partNumber === 7) {
+                                    } else if (part?.partNumber === 7) {
                                         setEditingGroup(null);
                                         setCreatePart7ModalVisible(true);
-                                    } else if (part.partNumber === 1) setCreatePart1ModalVisible(true); // Part 1 specific modal
-                                    else if (part.partNumber === 2) setCreatePart2ModalVisible(true); // Part 2 specific modal
+                                    } else if (part?.partNumber === 1) setCreatePart1ModalVisible(true);
+                                    else if (part?.partNumber === 2) setCreatePart2ModalVisible(true);
                                     else setCreateModalVisible(true);
                                 }}
+                                size="large"
+                                style={{
+                                    borderRadius: 12,
+                                    fontWeight: 700,
+                                    background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                                    border: 'none',
+                                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                                    height: 44,
+                                    padding: '0 24px'
+                                }}
                             >
-                                {isPart6 || part.partNumber === 7 ? 'Thêm đoạn văn' : 'Thêm mới'}
+                                {isPart6 || part?.partNumber === 7 ? 'Thêm nội dung mới' : 'Thêm câu hỏi mới'}
                             </Button>
                             {part?.partNumber !== 6 && part?.partNumber !== 7 && part?.partNumber !== 1 && part?.partNumber !== 2 && (
-                                <Button icon={<UploadOutlined />} onClick={() => setImportDrawerVisible(true)}>
+                                <Button
+                                    icon={<UploadOutlined />}
+                                    onClick={() => setImportDrawerVisible(true)}
+                                    size="large"
+                                    style={{ borderRadius: 12, fontWeight: 600, height: 44 }}
+                                >
                                     Import Excel
                                 </Button>
                             )}
@@ -890,16 +1060,27 @@ export default function PartDetail() {
                             title={
                                 selectedQuestionIds.length > 0
                                     ? (isPart6 || part?.partNumber === 7)
-                                        ? `Xóa ${selectedPassageCount} đoạn văn đã chọn?`
+                                        ? `Xóa ${selectedPassageCount} nội dung đã chọn?`
                                         : `Xóa ${selectedQuestionIds.length} câu đã chọn?`
-                                    : "Xóa TOÀN BỘ câu hỏi của phần này?"
+                                    : "Bạn có chắc xóa toàn bộ câu hỏi của phần này?"
                             }
                             onConfirm={selectedQuestionIds.length > 0 ? handleDeleteSelected : handleDeleteAll}
                             okButtonProps={{ danger: true }}
                         >
-                            <Button danger icon={<DeleteOutlined />}>
+                            <Button
+                                danger
+                                icon={<DeleteOutlined />}
+                                size="large"
+                                style={{
+                                    borderRadius: 12,
+                                    fontWeight: 600,
+                                    height: 44,
+                                    background: selectedQuestionIds.length > 0 ? '#FEF2F2' : 'transparent',
+                                    border: selectedQuestionIds.length > 0 ? '1px solid #FECACA' : '1px solid #FED7D7'
+                                }}
+                            >
                                 {selectedQuestionIds.length > 0
-                                    ? ((isPart6 || part?.partNumber === 7) ? `Xóa đoạn văn đã chọn (${selectedPassageCount})` : `Xóa đã chọn (${selectedQuestionIds.length})`)
+                                    ? ((isPart6 || part?.partNumber === 7) ? `Xóa đoạn văn (${selectedPassageCount})` : `Xóa (${selectedQuestionIds.length})`)
                                     : 'Xóa tất cả'}
                             </Button>
                         </Popconfirm>
@@ -991,13 +1172,44 @@ export default function PartDetail() {
 
 
             <Modal
-                title="Thêm câu hỏi mới"
+                title={
+                    <Space style={{ marginBottom: 8 }}>
+                        <div style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 18,
+                            boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
+                        }}>
+                            <PlusCircleOutlined />
+                        </div>
+                        <span style={{ fontSize: 20, color: '#1E293B', fontWeight: 800 }}>Thêm nội dung mới</span>
+                    </Space>
+                }
                 open={createModalVisible}
                 onCancel={() => setCreateModalVisible(false)}
                 onOk={() => createForm.submit()}
-                okText="Lưu"
-                cancelText="Hủy"
-                width={600}
+                okText="Lưu câu hỏi"
+                cancelText="Hủy bỏ"
+                width={700}
+                centered
+                okButtonProps={{
+                    style: {
+                        borderRadius: 10,
+                        background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
+                        border: 'none',
+                        height: 44,
+                        padding: '0 32px',
+                        fontWeight: 700,
+                        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                    }
+                }}
+                cancelButtonProps={{ style: { borderRadius: 10, height: 44 } }}
             >
                 <Form form={createForm} layout="vertical" onFinish={handleCreateQuestion}>
                     <div style={{ display: 'flex', gap: 16 }}>
@@ -1029,8 +1241,8 @@ export default function PartDetail() {
                     </div>
 
                     {isPart6 && (
-                        <Form.Item label="Đoạn văn" name="passage" rules={[{ required: true, message: 'Vui lòng nhập đoạn văn' }]}>
-                            <ReactQuill theme="snow" modules={quillModules} formats={quillFormats} placeholder="Nhập đoạn văn..." style={{ height: 200, marginBottom: 50 }} />
+                        <Form.Item label="Nội dung" name="passage" rules={[{ required: true, message: 'Vui lòng nhập nội dung' }]}>
+                            <ReactQuill theme="snow" modules={quillModules} formats={quillFormats} placeholder="Nhập nội dung..." style={{ height: 200, marginBottom: 50 }} />
                         </Form.Item>
                     )}
 
@@ -1051,11 +1263,44 @@ export default function PartDetail() {
             </Modal>
 
             <Modal
-                title="Chỉnh sửa câu hỏi"
+                title={
+                    <Space style={{ marginBottom: 8 }}>
+                        <div style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 18,
+                            boxShadow: '0 4px 10px rgba(16, 185, 129, 0.2)'
+                        }}>
+                            <EditOutlined />
+                        </div>
+                        <span style={{ fontSize: 20, color: '#1E293B', fontWeight: 800 }}>Chỉnh sửa câu hỏi</span>
+                    </Space>
+                }
                 open={editModalVisible}
                 onCancel={() => setEditModalVisible(false)}
                 onOk={() => editForm.submit()}
-                width={600}
+                okText="Cập nhật"
+                cancelText="Hủy bỏ"
+                width={700}
+                centered
+                okButtonProps={{
+                    style: {
+                        borderRadius: 10,
+                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                        border: 'none',
+                        height: 44,
+                        padding: '0 32px',
+                        fontWeight: 700,
+                        boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                    }
+                }}
+                cancelButtonProps={{ style: { borderRadius: 10, height: 44 } }}
             >
                 <Form form={editForm} layout="vertical" onFinish={handleEditQuestion}>
                     <div style={{ display: 'flex', gap: 16 }}>

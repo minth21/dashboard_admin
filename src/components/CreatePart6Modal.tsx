@@ -482,22 +482,50 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId, mo
     return (
         <Modal
             title={
-                <Space>
-                    <ExperimentOutlined style={{ color: '#2563EB', fontSize: 22 }} />
-                    <span style={{ fontWeight: 800, fontSize: 18, color: '#1E293B' }}>
-                        {mode === 'edit' ? 'Sửa đề thi Part 6' : 'Thêm mới đề thi Part 6'}
+                <Space style={{ marginBottom: 8 }}>
+                    <div style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 12,
+                        background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                        fontSize: 22,
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+                    }}>
+                        <ExperimentOutlined />
+                    </div>
+                    <span style={{ fontWeight: 800, fontSize: 20, color: '#1E293B' }}>
+                        {mode === 'edit' ? 'SỬA ĐOẠN VĂN' : 'TẠO ĐOẠN VĂN MỚI'}
                     </span>
                 </Space>
             }
             open={open}
             onCancel={onCancel}
-            width={1250}
+            width={1300}
+            centered
             style={{ top: 20 }}
             maskClosable={false}
             footer={[
-                <Button key="cancel" size="large" onClick={onCancel} style={{ borderRadius: 8 }}>Hủy bỏ</Button>,
-                <Button key="submit" size="large" type="primary" onClick={() => form.submit()} loading={loading} style={{ borderRadius: 8, background: '#2563EB' }}>
-                    Lưu tất cả
+                <Button key="cancel" size="large" onClick={onCancel} style={{ borderRadius: 10, fontWeight: 600 }}>Hủy bỏ</Button>,
+                <Button
+                    key="submit"
+                    size="large"
+                    type="primary"
+                    onClick={() => form.submit()}
+                    loading={loading}
+                    style={{
+                        borderRadius: 10,
+                        fontWeight: 700,
+                        background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                        border: 'none',
+                        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                        padding: '0 32px'
+                    }}
+                >
+                    Cập nhật
                 </Button>
             ]}
         >
@@ -514,9 +542,25 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId, mo
                                                 key={field.key}
                                                 size="small"
                                                 title={
-                                                    <span style={{ color: '#1E3A8A', fontWeight: 700, fontSize: 15 }}>
-                                                        Đoạn văn {index + 1} {aiDoneIndexes.includes(index) && <CheckCircleOutlined style={{ color: '#10B981', marginLeft: 8 }} />}
-                                                    </span>
+                                                    <Space>
+                                                        <div style={{
+                                                            width: 32,
+                                                            height: 32,
+                                                            borderRadius: 8,
+                                                            background: '#EFF6FF',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: '#2563EB',
+                                                            fontWeight: 800
+                                                        }}>
+                                                            {index + 1}
+                                                        </div>
+                                                        <span style={{ color: '#1E3A8A', fontWeight: 700, fontSize: 16 }}>
+                                                            Nội dung {index + 1}
+                                                        </span>
+                                                        {aiDoneIndexes.includes(index) && <CheckCircleOutlined style={{ color: '#10B981', fontSize: 18 }} />}
+                                                    </Space>
                                                 }
                                                 extra={
                                                     <Space>
@@ -526,18 +570,20 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId, mo
                                                                 return (
                                                                     <Button
                                                                         icon={<RobotOutlined />}
-                                                                        size="small"
+                                                                        size="middle"
                                                                         type="primary"
                                                                         loading={loading || (isAiProcessing && currentInsightIndex === index)}
                                                                         onClick={() => type === 'image' ? handleMagicScan(index) : handleGenerateAI(index)}
                                                                         style={{
-                                                                            background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                                                                            background: 'linear-gradient(135deg, #0EA5E9 0%, #2563EB 100%)',
                                                                             border: 'none',
-                                                                            borderRadius: 8,
-                                                                            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                                                                            borderRadius: 10,
+                                                                            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                                                                            fontWeight: 700,
+                                                                            padding: '0 16px'
                                                                         }}
                                                                     >
-                                                                        {type === 'image' ? 'Phân tích' : 'Tạo lời giải AI'}
+                                                                        {type === 'image' ? 'Phân tích' : 'AI Gen Insight'}
                                                                     </Button>
                                                                 );
                                                             }}
@@ -576,8 +622,8 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId, mo
 
                                                 <Form.Item name={[field.name, 'passageType']} initialValue="text" style={{ marginBottom: 12 }}>
                                                     <Radio.Group buttonStyle="solid" size="small">
-                                                        <Radio.Button value="text" style={{ borderRadius: '6px 0 0 6px' }}><b>Văn bản</b></Radio.Button>
-                                                        <Radio.Button value="image" style={{ borderRadius: '0 6px 6px 0' }}><b>Hình ảnh</b></Radio.Button>
+                                                        <Radio.Button value="text" style={{ borderRadius: '6px 0 0 6px', fontWeight: 'bold' }}><b>Văn bản</b></Radio.Button>
+                                                        <Radio.Button value="image" style={{ borderRadius: '0 6px 6px 0', fontWeight: 'bold' }}><b>Hình ảnh</b></Radio.Button>
                                                     </Radio.Group>
                                                 </Form.Item>
 
@@ -632,7 +678,7 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId, mo
                                                                 </Row>
                                                             )}
                                                             {type === 'text' && (
-                                                                <Form.Item name={[field.name, 'passage']} label={<span style={{ fontWeight: 600 }}>Nội dung Tiếng Anh</span>} rules={[{ required: true }]}>
+                                                                <Form.Item name={[field.name, 'passage']} label={<span style={{ fontWeight: 600 }}></span>} rules={[{ required: true }]}>
                                                                     <ReactQuill theme="snow" modules={QUILL_MODULES} formats={QUILL_FORMATS} style={{ height: 180, marginBottom: 45 }} placeholder="Dùng [131], [132]... để đánh dấu chỗ trống" />
                                                                 </Form.Item>
                                                             )}
@@ -679,7 +725,28 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId, mo
                                                                 {(qFields) => (
                                                                     <Collapse size="small" ghost>
                                                                         {qFields.map((qf, qi) => (
-                                                                            <Collapse.Panel header={<b style={{ color: '#1E293B' }}>Câu {start + qi}</b>} key={qf.key} style={{ background: '#F8FAFC', marginBottom: 8, borderRadius: 8, border: '1px solid #E2E8F0' }}>
+                                                                            <Collapse.Panel 
+                                                                                header={
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                                                        <span style={{
+                                                                                            display: 'flex',
+                                                                                            alignItems: 'center',
+                                                                                            justifyContent: 'center',
+                                                                                            minWidth: 42,
+                                                                                            height: 24,
+                                                                                            background: '#1E293B',
+                                                                                            color: '#fff',
+                                                                                            borderRadius: '4px',
+                                                                                            fontWeight: 700,
+                                                                                            fontSize: 12,
+                                                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                                                                        }}>#{start + qi}</span>
+                                                                                        <b style={{ color: '#1E293B' }}>CÂU HỎI</b>
+                                                                                    </div>
+                                                                                } 
+                                                                                key={qf.key} 
+                                                                                style={{ background: '#F8FAFC', marginBottom: 8, borderRadius: 8, border: '1px solid #E2E8F0' }}
+                                                                            >
 
                                                                                 {/* BẢO LƯU FIX LỖI ID VÀ TEXT */}
                                                                                 <Form.Item name={[qf.name, 'id']} hidden>
@@ -721,9 +788,20 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId, mo
                                             block
                                             icon={<PlusOutlined />}
                                             onClick={() => add()}
-                                            style={{ height: 48, marginBottom: 20, borderRadius: 12, borderColor: '#3B82F6', color: '#3B82F6', fontWeight: 600, background: '#EFF6FF' }}
+                                            style={{
+                                                height: 52,
+                                                marginBottom: 20,
+                                                borderRadius: 16,
+                                                borderColor: '#3B82F6',
+                                                color: '#2563EB',
+                                                fontWeight: 700,
+                                                background: '#F0F9FF',
+                                                fontSize: 15,
+                                                borderStyle: 'dashed',
+                                                borderWidth: 2
+                                            }}
                                         >
-                                            Thêm đoạn văn mới
+                                            Thêm đoạn văn Part 6 mới
                                         </Button>
                                     </>
                                 )}
@@ -734,26 +812,50 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId, mo
                     {/* RIGHT COLUMN: AI INSIGHTS */}
                     <Col span={10}>
                         <div style={{
-                            padding: '24px',
-                            backgroundColor: '#F8FAFC',
-                            borderRadius: '20px',
+                            padding: '32px 24px',
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '24px',
                             height: '75vh',
                             overflowY: 'auto',
-                            border: '1px solid #E2E8F0',
-                            boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)'
+                            border: '1px solid #F1F5F9',
+                            boxShadow: modernShadow
                         }}>
-                            <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                                <RobotOutlined style={{ fontSize: 36, color: '#2563EB' }} />
-                                <h3 style={{ margin: '12px 0 4px', color: '#1E3A8A', fontWeight: 800, fontSize: 18 }}>AI Companion INSIGHTS</h3>
-                                <p style={{ fontSize: 13, color: '#64748B' }}>Đồng bộ lời giải AI cho cả nhóm câu hỏi</p>
+                            <div style={{ textAlign: 'center', marginBottom: 32 }}>
+                                <div style={{
+                                    width: 64,
+                                    height: 64,
+                                    borderRadius: 18,
+                                    background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#fff',
+                                    fontSize: 32,
+                                    margin: '0 auto 16px',
+                                    boxShadow: '0 8px 16px rgba(37, 99, 235, 0.2)'
+                                }}>
+                                    <RobotOutlined />
+                                </div>
+                                <h3 style={{ margin: '0 0 6px', color: '#1E3A8A', fontWeight: 800, fontSize: 20 }}>AI Companion INSIGHTS</h3>
+                                <div style={{
+                                    display: 'inline-block',
+                                    padding: '4px 12px',
+                                    background: '#EFF6FF',
+                                    borderRadius: '12px',
+                                    fontSize: 12,
+                                    color: '#2563EB',
+                                    fontWeight: 700
+                                }}>
+                                    POWERED BY GEMINI PRO
+                                </div>
                             </div>
 
                             {aiInsights ? (
                                 <Space direction="vertical" style={{ width: '100%' }} size="large">
                                     {/* Passage Translations (Bilingual) */}
-                                    <div style={{ background: '#fff', padding: 20, borderRadius: 16, borderLeft: '4px solid #3B82F6', boxShadow: modernShadow }}>
-                                        <div style={{ marginBottom: 12, color: '#2563EB', fontWeight: 800, fontSize: 15 }}>
-                                            <TranslationOutlined style={{ marginRight: 6 }} /> Dịch đoạn văn (Song ngữ)
+                                    <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 20, border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+                                        <div style={{ marginBottom: 16, color: '#1E40AF', fontWeight: 800, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <TranslationOutlined style={{ color: '#2563EB' }} /> Dịch đoạn văn song ngữ
                                         </div>
                                         {aiInsights?.passageTranslations?.map((passage: any, pIdx: number) => (
                                             <div key={pIdx} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #F1F5F9' }}>
@@ -930,7 +1032,14 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId, mo
                                         <Button
                                             type="dashed"
                                             block
-                                            style={{ borderColor: '#2563EB', color: '#2563EB', borderRadius: 8, height: 40 }}
+                                            style={{
+                                                borderColor: '#D1D5DB',
+                                                color: '#4B5563',
+                                                borderRadius: 12,
+                                                height: 44,
+                                                fontWeight: 600,
+                                                background: '#F9FAFB'
+                                            }}
                                             icon={<PlusOutlined />}
                                             onClick={() => {
                                                 const currentInsights = aiInsights || {};
@@ -938,14 +1047,14 @@ export default function CreatePart6Modal({ open, onCancel, onSuccess, partId, mo
                                                 setAiInsights({ ...currentInsights, passageTranslations: newPts });
                                             }}
                                         >
-                                            Thêm đoạn văn bản mới (Passage block)
+                                            Chèn thêm khối văn bản mới
                                         </Button>
                                     </div>
 
                                     {/* Vocabulary */}
-                                    <div style={{ background: '#fff', padding: 20, borderRadius: 16, borderLeft: '4px solid #059669', boxShadow: modernShadow }}>
-                                        <div style={{ marginBottom: 12, color: '#059669', fontWeight: 800, fontSize: 15 }}>
-                                            <BookOutlined style={{ marginRight: 6 }} /> Từ vựng (mỗi dòng: từ : nghĩa)
+                                    <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 20, border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+                                        <div style={{ marginBottom: 12, color: '#059669', fontWeight: 800, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <BookOutlined style={{ color: '#10B981' }} /> Từ vựng khóa (từ : nghĩa)
                                         </div>
                                         <TextArea
                                             rows={4}

@@ -217,7 +217,7 @@ export default function PartQuestionDrawer({
                     );
                 } else {
                     message.error(data.message || 'Cập nhật câu hỏi thất bại');
-                    return; 
+                    return;
                 }
             }
 
@@ -382,8 +382,8 @@ export default function PartQuestionDrawer({
                     if (firstQ?.passageTranslationData) {
                         try {
                             const raw = JSON.parse(firstQ.passageTranslationData);
-                            aiTranslations = Array.isArray(raw) 
-                                ? raw 
+                            aiTranslations = Array.isArray(raw)
+                                ? raw
                                 : (raw.passages || raw.passageTranslations || []);
                         } catch (e) {
                             console.error('Lỗi parse AI translations:', e);
@@ -391,26 +391,26 @@ export default function PartQuestionDrawer({
                     }
 
                     return (
-                        <Card 
-                            key={index} 
+                        <Card
+                            key={index}
                             hoverable
-                            style={{ 
-                                marginBottom: 32, 
-                                borderRadius: 16, 
+                            style={{
+                                marginBottom: 32,
+                                borderRadius: 16,
                                 overflow: 'hidden',
                                 boxShadow: modernShadow,
                                 border: 'none'
-                            }} 
+                            }}
                             bodyStyle={{ padding: '0' }}
                         >
-                             <div style={{
+                            <div style={{
                                 padding: '20px',
                                 background: '#fff',
                             }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                        <div style={{ 
-                                            width: 32, height: 32, borderRadius: '50%', 
+                                        <div style={{
+                                            width: 32, height: 32, borderRadius: '50%',
                                             background: 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             color: '#fff', fontWeight: 800, fontSize: 14,
@@ -452,12 +452,12 @@ export default function PartQuestionDrawer({
                                             <BookOutlined style={{ color: '#2563EB', fontSize: 18 }} />
                                             <span style={{ fontWeight: 600, color: '#475569' }}>Nội dung gốc</span>
                                         </div>
-                                        <div style={{ 
-                                            maxHeight: 450, 
-                                            overflowY: 'auto', 
-                                            background: '#F8FAFC', 
-                                            padding: 16, 
-                                            borderRadius: 12, 
+                                        <div style={{
+                                            maxHeight: 450,
+                                            overflowY: 'auto',
+                                            background: '#F8FAFC',
+                                            padding: 16,
+                                            borderRadius: 12,
                                             border: '1px solid #E2E8F0',
                                             lineHeight: '1.6',
                                             color: '#1E293B'
@@ -472,21 +472,21 @@ export default function PartQuestionDrawer({
                                             <TranslationOutlined style={{ color: '#7C3AED', fontSize: 18 }} />
                                             <span style={{ fontWeight: 600, color: '#475569' }}>Bản dịch AI (Premium)</span>
                                         </div>
-                                        <div style={{ 
-                                            maxHeight: 450, 
-                                            overflowY: 'auto', 
-                                            background: 'linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%)', 
-                                            padding: 16, 
-                                            borderRadius: 12, 
+                                        <div style={{
+                                            maxHeight: 450,
+                                            overflowY: 'auto',
+                                            background: 'linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%)',
+                                            padding: 16,
+                                            borderRadius: 12,
                                             border: '1px solid #DDD6FE',
                                             boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
                                         }}>
                                             {aiTranslations.length > 0 ? (
                                                 aiTranslations.map((p: any, pIdx: number) => (
                                                     <div key={pIdx} style={{ marginBottom: 20 }}>
-                                                        <div style={{ 
-                                                            display: 'flex', alignItems: 'center', gap: 8, 
-                                                            marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid #EDE9FE' 
+                                                        <div style={{
+                                                            display: 'flex', alignItems: 'center', gap: 8,
+                                                            marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid #EDE9FE'
                                                         }}>
                                                             <div style={{ width: 4, height: 16, background: '#8B5CF6', borderRadius: 2 }} />
                                                             <Text strong style={{ color: '#5B21B6', fontSize: 14 }}>
@@ -494,7 +494,7 @@ export default function PartQuestionDrawer({
                                                             </Text>
                                                         </div>
                                                         {(p.items || p.sentences || []).map((s: any, sIdx: number) => (
-                                                            <div key={sIdx} style={{ 
+                                                            <div key={sIdx} style={{
                                                                 marginBottom: 12, padding: '8px 12px', background: 'rgba(255,255,255,0.5)',
                                                                 borderRadius: 8, border: '1px solid rgba(139, 92, 246, 0.1)'
                                                             }}>
@@ -507,9 +507,9 @@ export default function PartQuestionDrawer({
                                                     </div>
                                                 ))
                                             ) : (
-                                                <Empty 
-                                                    image={Empty.PRESENTED_IMAGE_SIMPLE} 
-                                                    description={<span style={{ fontSize: 12, color: '#94A3B8' }}>Chưa có bản dịch AI</span>} 
+                                                <Empty
+                                                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                                    description={<span style={{ fontSize: 12, color: '#94A3B8' }}>Chưa có bản dịch AI</span>}
                                                     style={{ margin: '60px 0' }}
                                                 />
                                             )}
@@ -528,16 +528,16 @@ export default function PartQuestionDrawer({
                                     dataSource={group.questions}
                                     renderItem={(item) => (
                                         <List.Item style={{ marginBottom: 16 }}>
-                                            <div style={{ 
-                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                                            <div style={{
+                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                                 padding: '16px', borderRadius: 12, background: '#F1F5F9',
                                                 border: '1px solid #E2E8F0',
                                                 transition: 'all 0.3s'
                                             }} className="hover-item-shadow">
                                                 <div style={{ flex: 1 }}>
                                                     <Space size="middle" align="start">
-                                                        <div style={{ 
-                                                            width: 28, height: 28, borderRadius: 6, 
+                                                        <div style={{
+                                                            width: 28, height: 28, borderRadius: 6,
                                                             background: '#fff', border: '1px solid #CBD5E1',
                                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                             fontWeight: 700, color: '#475569', fontSize: 12
@@ -553,9 +553,9 @@ export default function PartQuestionDrawer({
                                                     </Space>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                    <Tag color="green" style={{ 
+                                                    <Tag color="green" style={{
                                                         fontWeight: 800, padding: '4px 12px', borderRadius: 6,
-                                                        border: '1px solid #10B981', background: '#ECFDF5' 
+                                                        border: '1px solid #10B981', background: '#ECFDF5'
                                                     }}>
                                                         Đáp án: {item.correctAnswer}
                                                     </Tag>

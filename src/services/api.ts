@@ -176,6 +176,10 @@ export const questionApi = {
         });
         return response.data;
     },
+    delete: async (id: string): Promise<{ success: boolean; message: string }> => {
+        const response = await api.delete(`/questions/${id}`);
+        return response.data;
+    },
 };
 
 /**

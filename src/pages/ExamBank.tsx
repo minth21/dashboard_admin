@@ -26,6 +26,10 @@ import {
     LockOutlined,
     UnlockOutlined,
     EyeOutlined,
+    ClockCircleOutlined,
+    QuestionCircleOutlined,
+    PlusCircleOutlined,
+    SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -321,12 +325,6 @@ export default function ExamBank() {
     return (
         // Đổi màu nền wrapper thành xám nhạt để làm nổi bật các Card màu trắng
         <div style={{ padding: '24px', background: '#F8FAFC', minHeight: '100vh' }}>
-            
-            {/* Thẻ Tiêu đề Trang (Tùy chọn, thêm vào để tăng độ "sang") */}
-            <div style={{ marginBottom: 32 }}>
-                <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#1E293B' }}>Ngân hàng đề thi</h1>
-                <p style={{ margin: 0, color: '#64748B', fontSize: 15 }}>Quản lý và cập nhật kho tài liệu TOEIC của hệ thống.</p>
-            </div>
 
             {/* Statistics Cards */}
             <Row gutter={24} style={{ marginBottom: 32 }}>
@@ -490,60 +488,93 @@ export default function ExamBank() {
 
             {/* Edit Modal */}
             <Modal
-                title={<div style={{ fontSize: 20, color: '#1E293B', fontWeight: 700 }}>Chỉnh sửa đề thi</div>}
+                title={
+                    <Space style={{ marginBottom: 8 }}>
+                        <div style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 18,
+                            boxShadow: '0 4px 10px rgba(16, 185, 129, 0.2)'
+                        }}>
+                            <EditOutlined />
+                        </div>
+                        <span style={{ fontSize: 20, color: '#1E293B', fontWeight: 800 }}>Chỉnh sửa đề thi</span>
+                    </Space>
+                }
                 open={editModalVisible}
                 onCancel={() => setEditModalVisible(false)}
                 onOk={() => form.submit()}
                 okText="Lưu thay đổi"
                 cancelText="Hủy"
-                width={700}
+                width={850}
                 centered
-                okButtonProps={{ style: { borderRadius: 8, background: '#2563EB' } }}
-                cancelButtonProps={{ style: { borderRadius: 8 } }}
+                okButtonProps={{
+                    style: {
+                        borderRadius: 10,
+                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                        border: 'none',
+                        height: 40,
+                        padding: '0 24px',
+                        fontWeight: 600,
+                        boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                    }
+                }}
+                cancelButtonProps={{ style: { borderRadius: 10, height: 40 } }}
             >
                 <Form form={form} layout="vertical" onFinish={handleEditSubmit} style={{ marginTop: 24 }}>
-                    <Form.Item label={<span style={{ fontWeight: 600 }}>Tên đề thi</span>} name="title" rules={[{ required: true, message: 'Vui lòng nhập tên đề thi' }]}>
-                        <Input size="large" style={{ borderRadius: 8 }} />
-                    </Form.Item>
-
-                    <Form.Item label={<span style={{ fontWeight: 600 }}>Loại bài</span>} name="testType" rules={[{ required: true, message: 'Vui lòng chọn loại bài' }]}>
-                        <Select size="large">
-                            <Option value="LISTENING">Listening</Option>
-                            <Option value="READING">Reading</Option>
-                        </Select>
-                    </Form.Item>
-
-                    <Row gutter={16}>
+                    <Row gutter={24}>
                         <Col span={12}>
-                            <Form.Item label={<span style={{ fontWeight: 600 }}>Độ khó</span>} name="difficulty" rules={[{ required: true, message: 'Vui lòng chọn độ khó' }]}>
-                                <Select size="large">
-                                    <Option value="EASY">A1-A2</Option>
-                                    <Option value="MEDIUM">B1-B2</Option>
-                                    <Option value="HARD">C1</Option>
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Tên đề thi</span>} name="title" rules={[{ required: true, message: 'Vui lòng nhập tên đề thi' }]}>
+                                <Input size="large" prefix={<FileTextOutlined style={{ color: '#94A3B8' }} />} style={{ borderRadius: 10 }} />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Loại bài thi</span>} name="testType" rules={[{ required: true, message: 'Vui lòng chọn loại bài' }]}>
+                                <Select size="large" style={{ borderRadius: 10 }} suffixIcon={<QuestionCircleOutlined style={{ color: '#94A3B8' }} />}>
+                                    <Option value="LISTENING">Listening</Option>
+                                    <Option value="READING">Reading</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Row gutter={24}>
+                        <Col span={12}>
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Độ khó</span>} name="difficulty" rules={[{ required: true, message: 'Vui lòng chọn độ khó' }]}>
+                                <Select size="large" style={{ borderRadius: 10 }} suffixIcon={<SafetyCertificateOutlined style={{ color: '#94A3B8' }} />}>
+                                    <Option value="EASY">A1-A2 (Dễ)</Option>
+                                    <Option value="MEDIUM">B1-B2 (Trung bình)</Option>
+                                    <Option value="HARD">C1 (Khó)</Option>
                                 </Select>
                             </Form.Item>
                         </Col>
                         <Col span={12}>
                             {!isReviewer && (
-                                <Form.Item label={<span style={{ fontWeight: 600 }}>Trạng thái</span>} name="status" rules={[{ required: true, message: 'Vui lòng chọn trạng thái' }]}>
-                                    <Select size="large">
-                                        <Option value="LOCKED">Khóa</Option>
-                                        <Option value="UNLOCKED">Mở</Option>
+                                <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Trạng thái hiển thị</span>} name="status" rules={[{ required: true, message: 'Vui lòng chọn trạng thái' }]}>
+                                    <Select size="large" style={{ borderRadius: 10 }}>
+                                        <Option value="LOCKED">Khóa (Nháp)</Option>
+                                        <Option value="UNLOCKED">Mở (Công khai)</Option>
                                     </Select>
                                 </Form.Item>
                             )}
                         </Col>
                     </Row>
 
-                    <Row gutter={16}>
+                    <Row gutter={24}>
                         <Col span={12}>
-                            <Form.Item label={<span style={{ fontWeight: 600 }}>Thời gian (phút)</span>} name="duration" rules={[{ required: true, message: 'Vui lòng nhập thời gian' }]}>
-                                <InputNumber size="large" min={1} style={{ width: '100%', borderRadius: 8 }} />
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Thời gian làm bài (phút)</span>} name="duration" rules={[{ required: true, message: 'Vui lòng nhập thời gian' }]}>
+                                <InputNumber size="large" min={1} prefix={<ClockCircleOutlined style={{ color: '#94A3B8' }} />} style={{ width: '100%', borderRadius: 10 }} />
                             </Form.Item>
                         </Col>
                         <Col span={12}>
-                            <Form.Item label={<span style={{ fontWeight: 600 }}>Tổng câu hỏi</span>} name="totalQuestions" rules={[{ required: true, message: 'Vui lòng nhập tổng câu hỏi' }]}>
-                                <InputNumber size="large" min={1} style={{ width: '100%', borderRadius: 8 }} />
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Tổng số câu hỏi</span>} name="totalQuestions" rules={[{ required: true, message: 'Vui lòng nhập tổng câu hỏi' }]}>
+                                <InputNumber size="large" min={1} prefix={<BookOutlined style={{ color: '#94A3B8' }} />} style={{ width: '100%', borderRadius: 10 }} />
                             </Form.Item>
                         </Col>
                     </Row>
@@ -552,50 +583,83 @@ export default function ExamBank() {
 
             {/* Create Modal */}
             <Modal
-                title={<div style={{ fontSize: 20, color: '#1E293B', fontWeight: 700 }}>Tạo đề thi mới</div>}
+                title={
+                    <Space style={{ marginBottom: 8 }}>
+                        <div style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 18,
+                            boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
+                        }}>
+                            <PlusCircleOutlined />
+                        </div>
+                        <span style={{ fontSize: 20, color: '#1E293B', fontWeight: 800 }}>Tạo đề thi mới</span>
+                    </Space>
+                }
                 open={createModalVisible}
                 onCancel={() => setCreateModalVisible(false)}
                 onOk={() => createForm.submit()}
                 okText="Tạo đề thi"
                 cancelText="Hủy"
-                width={700}
+                width={850}
                 centered
-                okButtonProps={{ style: { borderRadius: 8, background: '#2563EB' } }}
-                cancelButtonProps={{ style: { borderRadius: 8 } }}
+                okButtonProps={{
+                    style: {
+                        borderRadius: 10,
+                        background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                        border: 'none',
+                        height: 40,
+                        padding: '0 24px',
+                        fontWeight: 600,
+                        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                    }
+                }}
+                cancelButtonProps={{ style: { borderRadius: 10, height: 40 } }}
             >
                 <Form form={createForm} layout="vertical" onFinish={handleCreateSubmit} style={{ marginTop: 24 }}>
-                    <Form.Item label={<span style={{ fontWeight: 600 }}>Tên đề thi</span>} name="title" rules={[{ required: true, message: 'Vui lòng nhập tên đề thi' }]}>
-                        <Input size="large" placeholder="Ví dụ: TOEIC-TEST 1" style={{ borderRadius: 8 }} />
-                    </Form.Item>
-
-                    <Form.Item label={<span style={{ fontWeight: 600 }}>Loại bài</span>} name="testType" rules={[{ required: true, message: 'Vui lòng chọn loại bài' }]}>
-                        <Select size="large">
-                            <Option value="LISTENING">Listening</Option>
-                            <Option value="READING">Reading</Option>
-                        </Select>
-                    </Form.Item>
-
-                    <Row gutter={16}>
+                    <Row gutter={24}>
                         <Col span={12}>
-                            <Form.Item label={<span style={{ fontWeight: 600 }}>Độ khó</span>} name="difficulty" rules={[{ required: true, message: 'Vui lòng chọn độ khó' }]}>
-                                <Select size="large">
-                                    <Option value="EASY">A1-A2</Option>
-                                    <Option value="MEDIUM">B1-B2</Option>
-                                    <Option value="HARD">C1</Option>
-                                </Select>
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Tên đề thi</span>} name="title" rules={[{ required: true, message: 'Vui lòng nhập tên đề thi' }]}>
+                                <Input size="large" placeholder="Ví dụ: TOEIC-TEST 1" prefix={<FileTextOutlined style={{ color: '#94A3B8' }} />} style={{ borderRadius: 10 }} />
                             </Form.Item>
                         </Col>
                         <Col span={12}>
-                            <Form.Item label={<span style={{ fontWeight: 600 }}>Thời gian (phút)</span>} name="duration" rules={[{ required: true, message: 'Vui lòng nhập thời gian' }]}>
-                                <InputNumber size="large" min={1} style={{ width: '100%', borderRadius: 8 }} />
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Loại bài thi</span>} name="testType" rules={[{ required: true, message: 'Vui lòng chọn loại bài' }]}>
+                                <Select size="large" style={{ borderRadius: 10 }} suffixIcon={<QuestionCircleOutlined style={{ color: '#94A3B8' }} />}>
+                                    <Option value="LISTENING">Listening (Nghe)</Option>
+                                    <Option value="READING">Reading (Đọc)</Option>
+                                </Select>
                             </Form.Item>
                         </Col>
                     </Row>
 
-                    <Row gutter={16}>
+                    <Row gutter={24}>
                         <Col span={12}>
-                            <Form.Item label={<span style={{ fontWeight: 600 }}>Tổng câu hỏi</span>} name="totalQuestions" rules={[{ required: true, message: 'Vui lòng nhập tổng câu hỏi' }]}>
-                                <InputNumber size="large" min={1} style={{ width: '100%', borderRadius: 8 }} />
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Độ khó</span>} name="difficulty" rules={[{ required: true, message: 'Vui lòng chọn độ khó' }]}>
+                                <Select size="large" style={{ borderRadius: 10 }} suffixIcon={<SafetyCertificateOutlined style={{ color: '#94A3B8' }} />}>
+                                    <Option value="EASY">A1-A2 (Dễ)</Option>
+                                    <Option value="MEDIUM">B1-B2 (Trung bình)</Option>
+                                    <Option value="HARD">C1 (Khó)</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Thời gian làm bài (phút)</span>} name="duration" rules={[{ required: true, message: 'Vui lòng nhập thời gian' }]}>
+                                <InputNumber size="large" min={1} placeholder="120" prefix={<ClockCircleOutlined style={{ color: '#94A3B8' }} />} style={{ width: '100%', borderRadius: 10 }} />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Row gutter={24}>
+                        <Col span={12}>
+                            <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Tổng số câu hỏi</span>} name="totalQuestions" rules={[{ required: true, message: 'Vui lòng nhập tổng câu hỏi' }]}>
+                                <InputNumber size="large" min={1} placeholder="200" prefix={<BookOutlined style={{ color: '#94A3B8' }} />} style={{ width: '100%', borderRadius: 10 }} />
                             </Form.Item>
                         </Col>
                     </Row>
