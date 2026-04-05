@@ -170,7 +170,7 @@ export default function QuestionPreview({ questions, loading, onEdit }: Question
                                                 <span>{q[optionKey] || `Option ${option}`}</span>
                                                 {isCorrect && (
                                                     <Tag color="success" style={{ marginLeft: 'auto' }}>
-                                                        Đáp án đúng
+                                                        Đáp án
                                                     </Tag>
                                                 )}
                                             </div>

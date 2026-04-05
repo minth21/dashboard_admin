@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Modal, Form, Input, Select, message, Upload, Button, Image, InputNumber, Row, Col, Card, Space, Divider, Typography, Alert } from 'antd';
+import { Modal, Form, Input, Select, message, Upload, Button, Image, InputNumber, Row, Col, Space, Alert } from 'antd';
 import { InboxOutlined, UploadOutlined, PictureOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
-import api, { uploadApi } from '../services/api';
+import api, { uploadApi, partApi } from '../services/api';
+import AudioBanner from './AudioBanner';
 
 const { Option } = Select;
 const { Dragger } = Upload;
-const { Title } = Typography;
 
 interface Question {
     id: string;
@@ -17,6 +17,7 @@ interface Question {
     optionC?: string;
     optionD?: string;
     correctAnswer: string;
+    level?: 'A1_A2' | 'B1_B2' | 'C1';
 }
 
 interface EditPart1ModalProps {
@@ -24,14 +25,19 @@ interface EditPart1ModalProps {
     onCancel: () => void;
     onSuccess: () => void;
     question: Question | null;
+    partId: string | null;
+    partName?: string;
+    partNumber?: number;
 }
 
-export default function EditPart1Modal({ open, onCancel, onSuccess, question }: EditPart1ModalProps) {
+export default function EditPart1Modal({ open, onCancel, onSuccess, question, partId, partName, partNumber }: EditPart1ModalProps) {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [imageFileList, setImageFileList] = useState<UploadFile[]>([]);
     const [previewImage, setPreviewImage] = useState<string>('');
     const [hasNewImage, setHasNewImage] = useState(false);
+    const [partAudioUrl, setPartAudioUrl] = useState<string | null>(null);
+    const [newAudioFile, setNewAudioFile] = useState<File | null>(null);
 
     useEffect(() => {
         if (open && question) {
@@ -42,23 +48,38 @@ export default function EditPart1Modal({ open, onCancel, onSuccess, question }: 
                 optionB: question.optionB || '',
                 optionC: question.optionC || '',
                 optionD: question.optionD || '',
-                correctAnswer: question.correctAnswer,
+                correctAnswer: question.correctAnswer
             });
 
             // Set current image
             setPreviewImage(question.imageUrl || '');
             setImageFileList([]);
             setHasNewImage(false);
+
+            if (partId) fetchPartAudio();
         } else {
             handleReset();
         }
-    }, [open, question]);
+    }, [open, question, partId]);
+
+    const fetchPartAudio = async () => {
+        if (!partId) return;
+        try {
+            const response = await api.get(`/parts/${partId}`);
+            if (response.data.success) {
+                setPartAudioUrl(response.data.part.audioUrl);
+            }
+        } catch (error) {
+            console.error('Error fetching part audio:', error);
+        }
+    };
 
     const handleReset = () => {
         form.resetFields();
         setImageFileList([]);
         setPreviewImage('');
         setHasNewImage(false);
+        setNewAudioFile(null);
     };
 
     const handleImageUpload = (file: any) => {
@@ -110,6 +131,18 @@ export default function EditPart1Modal({ open, onCancel, onSuccess, question }: 
                 imageUrl = imageRes.url;
             }
 
+            // 1.5 Handle Part Audio Upload
+            if (newAudioFile && partId) {
+                const audioRes = await uploadApi.audio(newAudioFile);
+                if (audioRes.success) {
+                    await partApi.update(partId, { audioUrl: audioRes.url });
+                    setPartAudioUrl(audioRes.url);
+                    setNewAudioFile(null);
+                } else {
+                    throw new Error(audioRes.message || 'Upload audio thất bại');
+                }
+            }
+
             // Update question using api.ts
             const payload = {
                 questionNumber: values.questionNumber,
@@ -118,7 +151,7 @@ export default function EditPart1Modal({ open, onCancel, onSuccess, question }: 
                 optionB: values.optionB || '(B)',
                 optionC: values.optionC || '(C)',
                 optionD: values.optionD || '(D)',
-                correctAnswer: values.correctAnswer,
+                correctAnswer: values.correctAnswer
             };
 
             const response = await api.patch(`/questions/${question.id}`, payload);
@@ -143,47 +176,161 @@ export default function EditPart1Modal({ open, onCancel, onSuccess, question }: 
 
     return (
         <Modal
-            title={<Title level={4} style={{ margin: 0 }}><PictureOutlined /> Sửa câu hỏi Part 1</Title>}
-            open={open}
-            onCancel={onCancel}
-            footer={null}
-            width={1000}
-            centered
-        >
+            title={
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        background: 'linear-gradient(135deg, #1E293B 0%, #334155 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 4px 10px rgba(30, 41, 59, 0.2)'
+                    }}>
+                        <PictureOutlined style={{ color: '#fff', fontSize: 18 }} />
+                    </div>
+                        <span style={{
+                            fontSize: 18,
+                            fontWeight: 800,
+                            background: 'linear-gradient(to right, #1E293B, #475569)',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                            letterSpacing: '0.5px'
+                        }}>
+                            {partName 
+                                ? (partName.toUpperCase().startsWith('PART') ? partName : `PART ${partNumber}: ${partName}`) 
+                                : 'CẬP NHẬT CÂU HỎI PART 1'}
+                        </span>
+                    </div>
+                }
+                open={open}
+                onCancel={onCancel}
+                footer={null}
+                width={1000}
+                centered
+                maskClosable={false}
+                styles={{
+                    body: { padding: '24px 32px' }
+                }}
+            >
+                <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
             <Form
                 form={form}
                 layout="vertical"
                 onFinish={handleSubmit}
+                requiredMark={false}
             >
-                <Alert
-                    description="Cập nhật thông tin câu hỏi. Bạn có thể thay đổi ảnh bằng cách upload ảnh mới."
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
+                {/* ─── AUDIO BANNER (top) ─── */}
+                <AudioBanner
+                    currentAudioUrl={partAudioUrl}
+                    newAudioFile={newAudioFile}
+                    onAudioFileChange={setNewAudioFile}
                 />
 
-                <Row gutter={24}>
+                <Alert
+                    description={
+                        <span style={{ color: '#475569', fontWeight: 500 }}>
+                            Bạn đang chỉnh sửa câu hỏi số {question?.questionNumber}. Bạn có thể thay đổi hình ảnh và nội dung audio transcript tại đây.
+                        </span>
+                    }
+                    type="info"
+                    showIcon
+                    style={{
+                        marginBottom: 16,
+                        borderRadius: 12,
+                        backgroundColor: '#F0F9FF',
+                        border: '1px solid #BAE6FD'
+                    }}
+                />
+
+                <Row gutter={32}>
                     {/* LEFT COLUMN: IMAGE */}
                     <Col span={10}>
-                        <Card title="1. Hình ảnh" bordered={false} className="shadow-sm">
-                            <div style={{ height: 300, border: '2px dashed #d9d9d9', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: '#fafafa', overflow: 'hidden', position: 'relative' }}>
+                        <div style={{
+                            background: '#F8FAFC',
+                            borderRadius: 16,
+                            padding: 20,
+                            border: '1px solid #E2E8F0',
+                            height: '100%'
+                        }}>
+                            <div style={{
+                                fontWeight: 700,
+                                color: '#1E293B',
+                                marginBottom: 16,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8
+                            }}>
+                                <span style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 6,
+                                    background: '#1E293B',
+                                    color: '#fff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 12
+                                }}>1</span>
+                                Hình ảnh minh họa
+                            </div>
+
+                            <div style={{
+                                height: 320,
+                                border: previewImage ? 'none' : '2px dashed #CBD5E1',
+                                borderRadius: 12,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                background: '#FFF',
+                                overflow: 'hidden',
+                                position: 'relative',
+                                transition: 'all 0.3s ease',
+                                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                            }}>
                                 {previewImage ? (
                                     <>
                                         <Image
                                             src={previewImage}
-                                            style={{ maxWidth: '100%', maxHeight: 300, objectFit: 'contain' }}
-                                            preview={false}
+                                            style={{ width: '100%', height: 320, objectFit: 'contain' }}
+                                            preview={true}
                                         />
-                                        {hasNewImage && (
+                                        {hasNewImage ? (
                                             <Button
-                                                type="text"
+                                                type="primary"
                                                 danger
+                                                shape="circle"
                                                 icon={<DeleteOutlined />}
-                                                style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(255,255,255,0.8)' }}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 12,
+                                                    right: 12,
+                                                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
+                                                }}
                                                 onClick={handleRemoveImage}
-                                            >
-                                                Hủy thay đổi
-                                            </Button>
+                                            />
+                                        ) : (
+                                            <div style={{ position: 'absolute', top: 12, right: 12 }}>
+                                                <Upload
+                                                    beforeUpload={handleImageUpload}
+                                                    showUploadList={false}
+                                                    maxCount={1}
+                                                    accept="image/*"
+                                                >
+                                                    <Button 
+                                                        icon={<UploadOutlined />} 
+                                                        shape="circle" 
+                                                        type="primary"
+                                                        style={{ 
+                                                            background: 'rgba(30, 41, 59, 0.8)', 
+                                                            border: 'none',
+                                                            boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                                                        }} 
+                                                    />
+                                                </Upload>
+                                            </div>
                                         )}
                                     </>
                                 ) : (
@@ -193,96 +340,159 @@ export default function EditPart1Modal({ open, onCancel, onSuccess, question }: 
                                         showUploadList={false}
                                         maxCount={1}
                                         accept="image/*"
-                                        style={{ width: '100%', height: '100%', border: 'none' }}
+                                        style={{ width: '100%', height: '100%', border: 'none', background: 'transparent' }}
                                     >
-                                        <p className="ant-upload-drag-icon" style={{ color: '#1890ff' }}>
-                                            <InboxOutlined style={{ fontSize: 48 }} />
+                                        <p className="ant-upload-drag-icon">
+                                            <InboxOutlined style={{ fontSize: 48, color: '#3B82F6' }} />
                                         </p>
-                                        <p className="ant-upload-text">Kéo thả hoặc click để upload ảnh</p>
-                                        <p className="ant-upload-hint">Hỗ trợ JPG, PNG</p>
+                                        <p style={{ fontWeight: 600, color: '#475569', margin: '16px 0 4px' }}>Kéo thả hoặc nhấn để tải ảnh</p>
+                                        <p style={{ color: '#94A3B8', fontSize: 13 }}>Hỗ trợ định dạng JPG, PNG</p>
                                     </Dragger>
                                 )}
                             </div>
-                            {!hasNewImage && previewImage && (
-                                <Upload
-                                    beforeUpload={handleImageUpload}
-                                    showUploadList={false}
-                                    maxCount={1}
-                                    accept="image/*"
-                                    style={{ marginTop: 8 }}
-                                >
-                                    <Button icon={<UploadOutlined />} block>
-                                        Thay đổi ảnh
-                                    </Button>
-                                </Upload>
-                            )}
-                        </Card>
+
+                            {/* Audio is now shown at top via AudioBanner */}
+                        </div>
                     </Col>
 
                     {/* RIGHT COLUMN: DETAILS */}
                     <Col span={14}>
-                        <Card title="2. Thông tin câu hỏi" bordered={false} className="shadow-sm">
-                            <Row gutter={16}>
-                                <Col span={12}>
-                                    <Form.Item
-                                        label="Số câu hỏi"
-                                        name="questionNumber"
-                                        rules={[
-                                            { required: true, message: 'Nhập số câu' },
-                                            { type: 'number', min: 1, max: 6, message: 'Part 1 chỉ có từ câu 1 đến 6' }
-                                        ]}
-                                    >
-                                        <InputNumber min={1} max={6} style={{ width: '100%' }} size="large" />
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-
-                            <Divider style={{ margin: '12px 0' }}>Nội dung Audio</Divider>
-
-                            <Form.Item name="optionA" label="Nội dung đáp án A (Audio)">
-                                <Input placeholder="Nhập nội dung audio đáp án A (tùy chọn)" />
-                            </Form.Item>
-                            <Form.Item name="optionB" label="Nội dung đáp án B (Audio)">
-                                <Input placeholder="Nhập nội dung audio đáp án B (tùy chọn)" />
-                            </Form.Item>
-                            <Form.Item name="optionC" label="Nội dung đáp án C (Audio)">
-                                <Input placeholder="Nhập nội dung audio đáp án C (tùy chọn)" />
-                            </Form.Item>
-                            <Form.Item name="optionD" label="Nội dung đáp án D (Audio)">
-                                <Input placeholder="Nhập nội dung audio đáp án D (tùy chọn)" />
-                            </Form.Item>
+                        <div style={{
+                            background: '#FFF',
+                            borderRadius: 16,
+                            padding: 24,
+                            border: '1px solid #E2E8F0',
+                            boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
+                        }}>
+                            <div style={{
+                                fontWeight: 700,
+                                color: '#1E293B',
+                                marginBottom: 20,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8
+                            }}>
+                                <span style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 6,
+                                    background: '#1E293B',
+                                    color: '#fff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 12
+                                }}>2</span>
+                                Thông tin chi tiết câu hỏi
+                            </div>
 
                             <Row gutter={16}>
                                 <Col span={24}>
                                     <Form.Item
-                                        label="Đáp án đúng"
-                                        name="correctAnswer"
-                                        rules={[{ required: true, message: 'Chọn đáp án đúng' }]}
+                                        label={<span style={{ fontWeight: 600, color: '#475569' }}>Số câu hỏi (1-6)</span>}
+                                        name="questionNumber"
+                                        rules={[
+                                            { required: true, message: 'Vui lòng nhập số thứ tự' },
+                                            { type: 'number', min: 1, max: 6, message: 'Part 1 chỉ gồm câu 1 đến câu 6' }
+                                        ]}
                                     >
-                                        <Select placeholder="Chọn đáp án đúng" size="large">
-                                            <Option value="A">Option A</Option>
-                                            <Option value="B">Option B</Option>
-                                            <Option value="C">Option C</Option>
-                                            <Option value="D">Option D</Option>
-                                        </Select>
+                                        <InputNumber
+                                            min={1}
+                                            max={6}
+                                            style={{ width: '100%', borderRadius: 8 }}
+                                            size="large"
+                                            placeholder="Chọn số câu hỏi..."
+                                        />
                                     </Form.Item>
                                 </Col>
                             </Row>
-                        </Card>
+
+                            <div style={{
+                                margin: '24px 0 16px',
+                                padding: '12px 16px',
+                                background: '#F1F5F9',
+                                borderRadius: 10,
+                                fontWeight: 700,
+                                color: '#475569',
+                                fontSize: 13,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8
+                            }}>
+                                <UploadOutlined /> Nội dung Transcript (Audio)
+                            </div>
+
+                            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                                <Form.Item name="optionA" style={{ marginBottom: 0 }}>
+                                    <Input prefix={<b style={{ color: '#94A3B8', marginRight: 8 }}>A</b>} placeholder="Nội dung audio câu A..." size="large" style={{ borderRadius: 8 }} />
+                                </Form.Item>
+                                <Form.Item name="optionB" style={{ marginBottom: 0 }}>
+                                    <Input prefix={<b style={{ color: '#94A3B8', marginRight: 8 }}>B</b>} placeholder="Nội dung audio câu B..." size="large" style={{ borderRadius: 8 }} />
+                                </Form.Item>
+                                <Form.Item name="optionC" style={{ marginBottom: 0 }}>
+                                    <Input prefix={<b style={{ color: '#94A3B8', marginRight: 8 }}>C</b>} placeholder="Nội dung audio câu C..." size="large" style={{ borderRadius: 8 }} />
+                                </Form.Item>
+                                <Form.Item name="optionD" style={{ marginBottom: 0 }}>
+                                    <Input prefix={<b style={{ color: '#94A3B8', marginRight: 8 }}>D</b>} placeholder="Nội dung audio câu D..." size="large" style={{ borderRadius: 8 }} />
+                                </Form.Item>
+                            </Space>
+
+                            <Form.Item
+                                label={<span style={{ fontWeight: 600, color: '#475569', marginTop: 20, display: 'block' }}>Đáp án chính xác</span>}
+                                name="correctAnswer"
+                                rules={[{ required: true, message: 'Vui lòng chọn đáp án đúng' }]}
+                                style={{ marginTop: 20 }}
+                            >
+                                <Select placeholder="Chọn một đáp án..." size="large" style={{ borderRadius: 8 }}>
+                                    <Option value="A">Option A</Option>
+                                    <Option value="B">Option B</Option>
+                                    <Option value="C">Option C</Option>
+                                    <Option value="D">Option D</Option>
+                                </Select>
+                            </Form.Item>
+
+                        </div>
                     </Col>
                 </Row>
 
-                <div style={{ textAlign: 'right', marginTop: 16, borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
-                    <Space>
-                        <Button onClick={onCancel} size="large">
-                            Hủy
-                        </Button>
-                        <Button type="primary" htmlType="submit" loading={loading} size="large" icon={<UploadOutlined />}>
-                            Lưu thay đổi
-                        </Button>
-                    </Space>
+                <div style={{
+                    textAlign: 'right',
+                    marginTop: 32,
+                    paddingTop: 24,
+                    borderTop: '1px solid #E2E8F0',
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    gap: 12
+                }}>
+                    <Button
+                        onClick={onCancel}
+                        size="large"
+                        style={{ borderRadius: 10, padding: '0 24px', fontWeight: 600, color: '#64748B' }}
+                    >
+                        Hủy bỏ
+                    </Button>
+                    <Button
+                        type="primary"
+                        htmlType="submit"
+                        loading={loading}
+                        size="large"
+                        icon={<UploadOutlined />}
+                        style={{
+                            borderRadius: 10,
+                            padding: '0 32px',
+                            fontWeight: 700,
+                            background: 'linear-gradient(135deg, #1E293B 0%, #334155 100%)',
+                            border: 'none',
+                            boxShadow: '0 4px 12px rgba(30, 41, 59, 0.25)'
+                        }}
+                    >
+                        Cập nhật
+                    </Button>
                 </div>
             </Form>
-        </Modal>
-    );
+        </div>
+    </Modal>
+);
 }

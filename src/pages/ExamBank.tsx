@@ -13,12 +13,13 @@ import {
     Row,
     Col,
     InputNumber,
+    Segmented,
+    theme,
 } from 'antd';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import {
     SearchOutlined,
     EditOutlined,
-    DeleteOutlined,
     PlusOutlined,
     FileTextOutlined,
     ReloadOutlined,
@@ -30,30 +31,40 @@ import {
     QuestionCircleOutlined,
     PlusCircleOutlined,
     SafetyCertificateOutlined,
+    CheckCircleOutlined,
+    UndoOutlined,
+    FlagOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Search } = Input;
 const { Option } = Select;
-import { testApi } from '../services/api';
+import { testApi, complaintApi } from '../services/api';
+import { useTheme } from '../hooks/useThemeContext';
 
 interface Exam {
     id: string;
     title: string;
     testType: 'LISTENING' | 'READING';
-    difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+    difficulty: 'A1_A2' | 'B1_B2' | 'C1';
     duration: number; // in minutes
     totalQuestions: number;
     listeningQuestions: number;
     readingQuestions: number;
-    status: 'LOCKED' | 'UNLOCKED';
+    status: 'PENDING' | 'ACTIVE' | 'LOCKED';
     createdAt: string;
     updatedAt: string;
 }
 
 export default function ExamBank() {
     const { user } = useOutletContext<{ user: any }>();
-    const isReviewer = user?.role === 'REVIEWER';
+    const isAdmin = user?.role === 'ADMIN';
+    const isSpecialist = user?.role === 'SPECIALIST';
+    const isTeacher = user?.role === 'TEACHER';
+    
+    // GV and CV can only create and edit
+    const canEditOrCreate = isAdmin || isSpecialist || isTeacher;
+
     const navigate = useNavigate();
     const [exams, setExams] = useState<Exam[]>([]);
     const [loading, setLoading] = useState(false);
@@ -68,16 +79,27 @@ export default function ExamBank() {
     const [editingExam, setEditingExam] = useState<Exam | null>(null);
     const [form] = Form.useForm();
     const [createForm] = Form.useForm();
+    const [complaintForm] = Form.useForm();
+
+    const [complaintModalVisible, setComplaintModalVisible] = useState(false);
+    const [selectedExamForComplaint, setSelectedExamForComplaint] = useState<Exam | null>(null);
 
     // Statistics
     const [stats, setStats] = useState({
         total: 0,
+        pending: 0,
+        active: 0,
         locked: 0,
-        unlocked: 0,
     });
 
-    // Cấu hình bóng đổ hiện đại (Ánh xanh dương cực nhẹ)
-    const modernShadow = '0 10px 30px -5px rgba(37, 99, 235, 0.08), 0 4px 10px -6px rgba(37, 99, 235, 0.04)';
+    const { theme: currentTheme } = useTheme();
+    const isDark = currentTheme === 'dark';
+    const { token } = theme.useToken();
+
+    // Cấu hình bóng đổ hiện đại (Ánh xanh dương cực nhẹ hoặc bóng tối trầm)
+    const modernShadow = isDark 
+        ? `0 10px 30px -5px rgba(0, 0, 0, 0.5), 0 4px 10px -6px rgba(0, 0, 0, 0.3)`
+        : '0 10px 30px -5px rgba(37, 99, 235, 0.08), 0 4px 10px -6px rgba(37, 99, 235, 0.04)';
 
     const fetchExams = async () => {
         setLoading(true);
@@ -85,20 +107,23 @@ export default function ExamBank() {
             const data = await testApi.list(page, pageSize, difficultyFilter, statusFilter, searchText);
 
             if (data.success) {
-                setExams(data.tests);
-                setTotal(data.pagination.total);
+                const tests = data.data || [];
+                setExams(tests);
+                setTotal(data.meta.pagination?.total || 0);
 
-                setStats({
-                    total: data.pagination.total,
-                    locked: data.tests.filter((e: Exam) => e.status === 'LOCKED').length,
-                    unlocked: data.tests.filter((e: Exam) => e.status === 'UNLOCKED').length,
-                });
-            } else {
-                message.error('Không thể tải danh sách đề thi');
+                if (data.meta.stats) {
+                    setStats({
+                        total: data.meta.stats.total || 0,
+                        pending: data.meta.stats.pending || 0,
+                        active: data.meta.stats.active || 0,
+                        locked: data.meta.stats.locked || 0,
+                    });
+                }
             }
+            // Không hiển thị lỗi nếu success: false - table sẽ tự show empty state
         } catch (error) {
             console.error('Error fetching exams:', error);
-            message.error('Có lỗi xảy ra khi tải dữ liệu');
+            // Quietly handle empty/unavailable state
         } finally {
             setLoading(false);
         }
@@ -134,6 +159,8 @@ export default function ExamBank() {
             if (data.success) {
                 message.success('Cập nhật đề thi thành công!');
                 setEditModalVisible(false);
+                setSearchText(''); // Clear search
+                setPage(1); // Jump to page 1
                 fetchExams();
             } else {
                 message.error(data.message || 'Không thể cập nhật đề thi');
@@ -148,8 +175,8 @@ export default function ExamBank() {
         createForm.resetFields();
         createForm.setFieldsValue({
             testType: 'LISTENING',
-            difficulty: 'MEDIUM',
-            status: 'LOCKED',
+            difficulty: 'B1_B2',
+            status: 'PENDING',
             duration: 120,
             totalQuestions: 100,
         });
@@ -158,11 +185,13 @@ export default function ExamBank() {
 
     const handleCreateSubmit = async (values: any) => {
         try {
-            const payload = { ...values, status: 'LOCKED' };
+            const payload = { ...values, status: 'PENDING' };
             const data = await testApi.create(payload);
             if (data.success) {
                 message.success('Tạo đề thi thành công!');
                 setCreateModalVisible(false);
+                setSearchText(''); // Clear search
+                setPage(1); // Reset about to page 1 for new test
                 fetchExams();
             } else {
                 message.error(data.message || 'Không thể tạo đề thi');
@@ -173,28 +202,88 @@ export default function ExamBank() {
         }
     };
 
-    const handleDelete = async (examId: string, examTitle: string) => {
+    const handleApprove = async (examId: string, examTitle: string) => {
         Modal.confirm({
-            title: 'Xác nhận xóa',
-            content: `Bạn có chắc chắn muốn xóa đề thi "${examTitle}"?`,
-            okText: 'Xóa',
-            okType: 'danger',
+            title: 'Xác nhận Duyệt',
+            content: (
+                <div>
+                    <p>Bạn có chắc chắn muốn xuất bản đề thi <strong>"{examTitle}"</strong>?</p>
+                    <p style={{ color: '#D97706', marginTop: 8 }}>
+                        ⚠️ Toàn bộ Parts và câu hỏi bên trong sẽ được hiển thị <strong>ngay lập tức</strong> trên App học viên.
+                    </p>
+                </div>
+            ),
+            okText: 'Duyệt & Xuất bản toàn bộ',
+            okType: 'primary',
             cancelText: 'Hủy',
             onOk: async () => {
                 try {
-                    const data = await testApi.delete(examId);
+                    const data = await testApi.approveFull(examId);
                     if (data.success) {
-                        message.success('Đã xóa đề thi thành công!');
+                        message.success(data.message || 'Đã duyệt và xuất bản toàn bộ đề thi thành công!');
                         fetchExams();
                     } else {
-                        message.error(data.message || 'Không thể xóa đề thi');
+                        message.error(data.message || 'Không thể duyệt đề thi');
                     }
                 } catch (error) {
-                    console.error('Error deleting exam:', error);
-                    message.error('Có lỗi xảy ra khi xóa đề thi');
+                    console.error('Error approving exam:', error);
+                    message.error('Có lỗi xảy ra khi duyệt đề thi');
                 }
             },
         });
+    };
+
+    const handleToggleStatus = async (examId: string, examTitle: string, currentStatus: string) => {
+        const isLocking = currentStatus === 'ACTIVE';
+        Modal.confirm({
+            title: isLocking ? 'Xác nhận khóa' : 'Xác nhận khôi phục',
+            content: isLocking
+                ? `Bạn có chắc chắn muốn vô hiệu hóa đề thi "${examTitle}"? (Học viên sẽ không nhìn thấy nữa)`
+                : `Bạn có chắc chắn muốn khôi phục đề thi "${examTitle}" về trạng thái hoạt động?`,
+            okText: isLocking ? 'Khóa bài' : 'Khôi phục',
+            okType: isLocking ? 'danger' : 'primary',
+            cancelText: 'Hủy',
+            onOk: async () => {
+                try {
+                    const data = await testApi.toggleLock(examId);
+                    if (data.success) {
+                        message.success(isLocking ? 'Đã khóa đề thi thành công!' : 'Đã khôi phục đề thi thành công!');
+                        fetchExams();
+                    } else {
+                        message.error(data.message || 'Không thể thay đổi trạng thái đề thi');
+                    }
+                } catch (error) {
+                    console.error('Error toggling exam status:', error);
+                    message.error('Có lỗi xảy ra khi cập nhật trạng thái');
+                }
+            },
+        });
+    };
+
+
+    const handleOpenComplaint = (exam: Exam) => {
+        setSelectedExamForComplaint(exam);
+        complaintForm.resetFields();
+        setComplaintModalVisible(true);
+    };
+
+    const handleComplaintSubmit = async (values: any) => {
+        if (!selectedExamForComplaint) return;
+        try {
+            const data = await complaintApi.send({
+                testId: selectedExamForComplaint.id,
+                content: values.content
+            });
+            if (data.success) {
+                message.success('Gửi góp ý thành công!');
+                setComplaintModalVisible(false);
+            } else {
+                message.error(data.message || 'Không thể gửi góp ý');
+            }
+        } catch (error) {
+            console.error('Error sending complaint:', error);
+            message.error('Có lỗi xảy ra khi gửi góp ý');
+        }
     };
 
     const columns: ColumnsType<Exam> = [
@@ -204,8 +293,8 @@ export default function ExamBank() {
             key: 'title',
             width: 250,
             render: (title: string) => (
-                <div style={{ fontWeight: 700, color: '#1E3A8A', fontSize: '15px' }}>
-                    <FileTextOutlined style={{ marginRight: 10, color: '#3B82F6' }} />
+                <div style={{ fontWeight: 700, color: token.colorText, fontSize: '15px' }}>
+                    <FileTextOutlined style={{ marginRight: 10, color: token.colorPrimary }} />
                     {title}
                 </div>
             ),
@@ -218,7 +307,7 @@ export default function ExamBank() {
             render: (_, record: Exam) => {
                 const hasListening = record.listeningQuestions > 0;
                 const hasReading = record.readingQuestions > 0;
-                let type = 'Full Test';
+                let type = 'Luyện tổng hợp';
                 let color = 'cyan';
                 if (hasListening && !hasReading) { type = 'Listening'; color = 'blue'; }
                 else if (!hasListening && hasReading) { type = 'Reading'; color = 'green'; }
@@ -233,9 +322,9 @@ export default function ExamBank() {
             align: 'center' as const,
             render: (difficulty: string) => {
                 const difficultyConfig: { [key: string]: { color: string; label: string } } = {
-                    EASY: { color: 'success', label: 'A1-A2' },
-                    MEDIUM: { color: 'warning', label: 'B1-B2' },
-                    HARD: { color: 'error', label: 'C1' },
+                    A1_A2: { color: 'success', label: 'A1-A2' },
+                    B1_B2: { color: 'warning', label: 'B1-B2' },
+                    C1: { color: 'error', label: 'C1' },
                 };
                 const config = difficultyConfig[difficulty] || { color: 'default', label: difficulty };
                 return <Tag color={config.color} style={{ borderRadius: '6px', fontWeight: 600 }}>{config.label}</Tag>;
@@ -247,7 +336,7 @@ export default function ExamBank() {
             key: 'duration',
             width: 100,
             align: 'center' as const,
-            render: (duration: number) => <span style={{ fontWeight: 600, color: '#475569' }}>{duration} phút</span>,
+            render: (duration: number) => <span style={{ fontWeight: 600, color: token.colorTextSecondary }}>{duration} phút</span>,
         },
         {
             title: 'Tổng câu hỏi',
@@ -255,7 +344,7 @@ export default function ExamBank() {
             key: 'totalQuestions',
             width: 120,
             align: 'center' as const,
-            render: (total: number) => <span style={{ fontWeight: 600, color: '#475569' }}>{total}</span>,
+            render: (total: number) => <span style={{ fontWeight: 600, color: token.colorTextSecondary }}>{total}</span>,
         },
         {
             title: 'Trạng thái',
@@ -265,15 +354,16 @@ export default function ExamBank() {
             align: 'center' as const,
             render: (status: string) => {
                 const statusConfig: { [key: string]: { color: string; label: string; icon: any; bg: string } } = {
-                    LOCKED: { color: '#DC2626', label: 'Khóa', icon: <LockOutlined />, bg: '#FEF2F2' },
-                    UNLOCKED: { color: '#059669', label: 'Mở', icon: <UnlockOutlined />, bg: '#ECFDF5' },
+                    PENDING: { color: '#D97706', label: 'Chờ duyệt', icon: <ClockCircleOutlined />, bg: '#FFFBEB' },
+                    ACTIVE: { color: '#059669', label: 'Hoạt động', icon: <UnlockOutlined />, bg: '#ECFDF5' },
+                    LOCKED: { color: '#DC2626', label: 'Đã khóa', icon: <LockOutlined />, bg: '#FEF2F2' },
                 };
                 const config = statusConfig[status] || { color: '#64748B', label: status, icon: null, bg: '#F1F5F9' };
                 return (
                     <div style={{
                         background: config.bg, color: config.color, padding: '4px 12px',
                         borderRadius: '20px', display: 'inline-flex', alignItems: 'center',
-                        fontWeight: 600, gap: '6px', fontSize: '13px'
+                        fontWeight: 600, gap: '6px', fontSize: '12px', border: `1px solid ${config.color}20`
                     }}>
                         {config.icon} {config.label}
                     </div>
@@ -286,7 +376,7 @@ export default function ExamBank() {
             key: 'createdAt',
             width: 120,
             align: 'center' as const,
-            render: (date: string) => <span style={{ color: '#64748B' }}>{new Date(date).toLocaleDateString('vi-VN')}</span>,
+            render: (date: string) => <span style={{ color: token.colorTextSecondary }}>{new Date(date).toLocaleDateString('vi-VN')}</span>,
         },
         {
             title: 'Hành động',
@@ -301,20 +391,52 @@ export default function ExamBank() {
                         style={{ color: '#2563EB', background: '#DBEAFE', borderRadius: '8px' }}
                         icon={<EyeOutlined />}
                         onClick={() => navigate(`/exam-bank/${record.id}`)}
+                        title="Xem chi tiết"
                     />
-                    <Button
-                        type="text"
-                        style={{ color: '#059669', background: '#D1FAE5', borderRadius: '8px' }}
-                        icon={<EditOutlined />}
-                        onClick={() => handleEdit(record)}
-                    />
-                    {!isReviewer && (
+                    {canEditOrCreate && (
                         <Button
                             type="text"
-                            danger
-                            style={{ background: '#FEE2E2', borderRadius: '8px' }}
-                            icon={<DeleteOutlined />}
-                            onClick={() => handleDelete(record.id, record.title)}
+                            style={{ color: '#059669', background: '#D1FAE5', borderRadius: '8px' }}
+                            icon={<EditOutlined />}
+                            onClick={() => handleEdit(record)}
+                            title="Chỉnh sửa"
+                        />
+                    )}
+                    {isAdmin && record.status === 'PENDING' && (
+                        <Button
+                            type="text"
+                            style={{ color: '#D97706', background: '#FFFBEB', borderRadius: '8px' }}
+                            icon={<CheckCircleOutlined />}
+                            onClick={() => handleApprove(record.id, record.title)}
+                            title="Duyệt bài"
+                        />
+                    )}
+                    {isAdmin && record.status === 'LOCKED' && (
+                        <Button
+                            type="text"
+                            style={{ color: '#2563EB', background: '#DBEAFE', borderRadius: '8px' }}
+                            icon={<UndoOutlined />}
+                            onClick={() => handleToggleStatus(record.id, record.title, record.status)}
+                            title="Khôi phục"
+                        />
+                    )}
+                    {isAdmin && record.status === 'ACTIVE' && (
+                        <Button
+                            type="text"
+                            style={{ color: '#DC2626', background: '#FEE2E2', borderRadius: '8px' }}
+                            icon={<LockOutlined />}
+                            onClick={() => handleToggleStatus(record.id, record.title, record.status)}
+                            title="Khóa bài"
+                        />
+                    )}
+
+                    {user?.role === 'TEACHER' && (
+                         <Button
+                            type="text"
+                            style={{ color: '#D97706', background: '#FEF3C7', borderRadius: '8px' }}
+                            icon={<FlagOutlined />}
+                            onClick={() => handleOpenComplaint(record)}
+                            title="Góp ý bài thi"
                         />
                     )}
                 </Space>
@@ -324,22 +446,23 @@ export default function ExamBank() {
 
     return (
         // Đổi màu nền wrapper thành xám nhạt để làm nổi bật các Card màu trắng
-        <div style={{ padding: '24px', background: '#F8FAFC', minHeight: '100vh' }}>
+        <div style={{ padding: '24px', background: token.colorBgLayout, minHeight: '100vh' }}>
 
             {/* Statistics Cards */}
             <Row gutter={24} style={{ marginBottom: 32 }}>
                 {[
                     { title: 'Tổng đề thi', value: stats.total, icon: <BookOutlined />, color: '#1D4ED8', bg: 'linear-gradient(135deg, #DBEAFE 0%, #EFF6FF 100%)' },
-                    { title: 'Đã mở', value: stats.unlocked, icon: <UnlockOutlined />, color: '#047857', bg: 'linear-gradient(135deg, #D1FAE5 0%, #ECFDF5 100%)' },
+                    { title: 'Chờ duyệt', value: stats.pending, icon: <ClockCircleOutlined />, color: '#D97706', bg: 'linear-gradient(135deg, #FFEDD5 0%, #FFFBEB 100%)' },
+                    { title: 'Hoạt động', value: stats.active, icon: <UnlockOutlined />, color: '#047857', bg: 'linear-gradient(135deg, #D1FAE5 0%, #ECFDF5 100%)' },
                     { title: 'Đang khóa', value: stats.locked, icon: <LockOutlined />, color: '#B91C1C', bg: 'linear-gradient(135deg, #FEE2E2 0%, #FEF2F2 100%)' },
                 ].map((item, index) => (
-                    <Col xs={24} sm={12} md={8} key={index}>
+                    <Col xs={24} sm={12} md={6} key={index}>
                         <Card
                             hoverable
                             style={{
                                 borderRadius: 24,
-                                border: 'none',
-                                background: '#FFFFFF',
+                                border: `1px solid ${token.colorBorder}`,
+                                background: token.colorBgContainer,
                                 boxShadow: modernShadow,
                                 transition: 'all 0.3s ease'
                             }}
@@ -361,10 +484,10 @@ export default function ExamBank() {
                                     {item.icon}
                                 </div>
                                 <div>
-                                    <div style={{ fontWeight: 700, color: '#64748B', textTransform: 'uppercase', fontSize: 13, letterSpacing: '0.5px', marginBottom: 4 }}>
+                                    <div style={{ fontWeight: 700, color: token.colorTextSecondary, textTransform: 'uppercase', fontSize: 13, letterSpacing: '0.5px', marginBottom: 4 }}>
                                         {item.title}
                                     </div>
-                                    <div style={{ color: '#0F172A', fontWeight: 800, fontSize: 32, lineHeight: 1 }}>
+                                    <div style={{ color: token.colorText, fontWeight: 800, fontSize: 32, lineHeight: 1 }}>
                                         {item.value}
                                     </div>
                                 </div>
@@ -374,21 +497,44 @@ export default function ExamBank() {
                 ))}
             </Row>
 
+            {/* Primary Action */}
+            {canEditOrCreate && (
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-start' }}>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={handleOpenCreateModal}
+                        size="large"
+                        style={{
+                            borderRadius: 12,
+                            fontWeight: 600,
+                            height: 48,
+                            padding: '0 24px',
+                            background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                            border: 'none',
+                            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                        }}
+                    >
+                        Thêm đề thi mới
+                    </Button>
+                </div>
+            )}
+
             {/* Actions & Filters */}
             <Card
                 style={{
                     marginBottom: 24,
                     borderRadius: 20,
-                    border: 'none',
-                    background: '#FFFFFF',
+                    border: `1px solid ${token.colorBorder}`,
+                    background: token.colorBgContainer,
                     boxShadow: modernShadow
                 }}
                 bodyStyle={{ padding: '20px 24px' }}
             >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-                    <Space size="middle" wrap>
+                    <Space size="small">
                         <Search
-                            placeholder="Tìm kiếm đề thi..."
+                            placeholder="Tìm kiếm..."
                             allowClear
                             onSearch={handleSearch}
                             style={{ width: 320 }}
@@ -400,58 +546,44 @@ export default function ExamBank() {
                             value={difficultyFilter}
                             onChange={(value) => {
                                 setDifficultyFilter(value);
-                                setPage(1);
                             }}
-                            style={{ width: 160 }}
+                            style={{ width: 110 }}
+                            dropdownStyle={{ borderRadius: '12px' }}
                         >
-                            <Option value="ALL">Tất cả độ khó</Option>
-                            <Option value="EASY">Dễ (A1-A2)</Option>
-                            <Option value="MEDIUM">Trung bình (B1-B2)</Option>
-                            <Option value="HARD">Khó (C1)</Option>
+                            <Option value="A1_A2">A1-A2</Option>
+                            <Option value="B1_B2">B1-B2</Option>
+                            <Option value="C1">C1</Option>
                         </Select>
-                        <Select
+                        <Segmented
                             size="large"
                             value={statusFilter}
                             onChange={(value) => {
-                                setStatusFilter(value);
-                                setPage(1);
+                                setStatusFilter(value as string);
                             }}
-                            style={{ width: 160 }}
-                        >
-                            <Option value="ALL">Tất cả trạng thái</Option>
-                            <Option value="UNLOCKED">Đang mở bài</Option>
-                            <Option value="LOCKED">Đang khóa bài</Option>
-                        </Select>
+                            options={[
+                                { label: 'Tất cả', value: 'ALL' },
+                                { label: 'Chờ', value: 'PENDING' },
+                                { label: 'Hiện', value: 'ACTIVE' },
+                                { label: 'Khóa', value: 'LOCKED' },
+                            ]}
+                            style={{
+                                borderRadius: '12px',
+                                padding: '4px',
+                                background: isDark ? '#334155' : '#F1F5F9',
+                                fontWeight: 600,
+                                fontSize: '13px',
+                                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)',
+                                color: isDark ? '#CBD5E1' : '#475569'
+                            }}
+                        />
                         <Button
                             size="large"
                             icon={<ReloadOutlined />}
                             onClick={fetchExams}
                             loading={loading}
                             style={{ borderRadius: '10px', color: '#475569', fontWeight: 600 }}
-                        >
-                            Làm mới
-                        </Button>
+                        />
                     </Space>
-
-                    {!isReviewer && (
-                        <Button
-                            type="primary"
-                            icon={<PlusOutlined />}
-                            onClick={handleOpenCreateModal}
-                            size="large"
-                            style={{
-                                borderRadius: 12,
-                                fontWeight: 700,
-                                height: 48,
-                                padding: '0 24px',
-                                background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
-                                border: 'none',
-                                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
-                            }}
-                        >
-                            Thêm đề thi mới
-                        </Button>
-                    )}
                 </div>
             </Card>
 
@@ -459,7 +591,7 @@ export default function ExamBank() {
             <Card
                 style={{
                     borderRadius: 20,
-                    border: 'none',
+                    border: `1px solid ${token.colorBorder}`,
                     boxShadow: modernShadow,
                     overflow: 'hidden'
                 }}
@@ -504,7 +636,7 @@ export default function ExamBank() {
                         }}>
                             <EditOutlined />
                         </div>
-                        <span style={{ fontSize: 20, color: '#1E293B', fontWeight: 800 }}>Chỉnh sửa đề thi</span>
+                        <span style={{ fontSize: 20, color: token.colorText, fontWeight: 800 }}>Chỉnh sửa đề thi</span>
                     </Space>
                 }
                 open={editModalVisible}
@@ -548,18 +680,19 @@ export default function ExamBank() {
                         <Col span={12}>
                             <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Độ khó</span>} name="difficulty" rules={[{ required: true, message: 'Vui lòng chọn độ khó' }]}>
                                 <Select size="large" style={{ borderRadius: 10 }} suffixIcon={<SafetyCertificateOutlined style={{ color: '#94A3B8' }} />}>
-                                    <Option value="EASY">A1-A2 (Dễ)</Option>
-                                    <Option value="MEDIUM">B1-B2 (Trung bình)</Option>
-                                    <Option value="HARD">C1 (Khó)</Option>
+                                    <Option value="A1_A2">A1-A2</Option>
+                                    <Option value="B1_B2">B1-B2</Option>
+                                    <Option value="C1">C1</Option>
                                 </Select>
                             </Form.Item>
                         </Col>
                         <Col span={12}>
-                            {!isReviewer && (
+                            {isAdmin && (
                                 <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Trạng thái hiển thị</span>} name="status" rules={[{ required: true, message: 'Vui lòng chọn trạng thái' }]}>
                                     <Select size="large" style={{ borderRadius: 10 }}>
-                                        <Option value="LOCKED">Khóa (Nháp)</Option>
-                                        <Option value="UNLOCKED">Mở (Công khai)</Option>
+                                        <Option value="PENDING">Chờ duyệt</Option>
+                                        <Option value="ACTIVE">Hoạt động</Option>
+                                        <Option value="LOCKED">Đã khóa</Option>
                                     </Select>
                                 </Form.Item>
                             )}
@@ -599,7 +732,7 @@ export default function ExamBank() {
                         }}>
                             <PlusCircleOutlined />
                         </div>
-                        <span style={{ fontSize: 20, color: '#1E293B', fontWeight: 800 }}>Tạo đề thi mới</span>
+                        <span style={{ fontSize: 20, color: token.colorText, fontWeight: 800 }}>Tạo đề thi mới</span>
                     </Space>
                 }
                 open={createModalVisible}
@@ -643,9 +776,9 @@ export default function ExamBank() {
                         <Col span={12}>
                             <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Độ khó</span>} name="difficulty" rules={[{ required: true, message: 'Vui lòng chọn độ khó' }]}>
                                 <Select size="large" style={{ borderRadius: 10 }} suffixIcon={<SafetyCertificateOutlined style={{ color: '#94A3B8' }} />}>
-                                    <Option value="EASY">A1-A2 (Dễ)</Option>
-                                    <Option value="MEDIUM">B1-B2 (Trung bình)</Option>
-                                    <Option value="HARD">C1 (Khó)</Option>
+                                    <Option value="A1_A2">A1-A2</Option>
+                                    <Option value="B1_B2">B1-B2</Option>
+                                    <Option value="C1">C1</Option>
                                 </Select>
                             </Form.Item>
                         </Col>
@@ -663,6 +796,69 @@ export default function ExamBank() {
                             </Form.Item>
                         </Col>
                     </Row>
+                </Form>
+            </Modal>
+
+            {/* Complaint Modal */}
+            <Modal
+                title={
+                    <Space style={{ marginBottom: 8 }}>
+                        <div style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 18,
+                            boxShadow: '0 4px 10px rgba(245, 158, 11, 0.2)'
+                        }}>
+                            <FlagOutlined />
+                        </div>
+                        <span style={{ fontSize: 20, color: token.colorText, fontWeight: 800 }}>Góp ý sai sót bài thi</span>
+                    </Space>
+                }
+                open={complaintModalVisible}
+                onCancel={() => setComplaintModalVisible(false)}
+                onOk={() => complaintForm.submit()}
+                okText="Gửi góp ý"
+                cancelText="Hủy"
+                width={600}
+                centered
+                okButtonProps={{
+                    style: {
+                        borderRadius: 10,
+                        background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                        border: 'none',
+                        height: 40,
+                        padding: '0 24px',
+                        fontWeight: 600,
+                        boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)'
+                    }
+                }}
+                cancelButtonProps={{ style: { borderRadius: 10, height: 40 } }}
+            >
+                <div style={{ marginBottom: 20, padding: '12px 16px', background: isDark ? '#334155' : '#FEF3C7', borderRadius: 12, border: '1px solid #F59E0B40' }}>
+                    <div style={{ fontWeight: 600, color: '#B45309', marginBottom: 4 }}>📌 Bài thi: {selectedExamForComplaint?.title}</div>
+                    <div style={{ fontSize: 13, color: '#92400E' }}>
+                        Góp ý của bạn sẽ được gửi trực tiếp đến Chuyên viên và Admin để xem xét và sửa lỗi.
+                    </div>
+                </div>
+
+                <Form form={complaintForm} layout="vertical" onFinish={handleComplaintSubmit}>
+                    <Form.Item 
+                        label={<span style={{ fontWeight: 600 }}>Nội dung góp ý chi tiết</span>} 
+                        name="content" 
+                        rules={[{ required: true, message: 'Vui lòng nhập nội dung góp ý' }]}
+                    >
+                        <Input.TextArea 
+                            rows={5} 
+                            placeholder="Ví dụ: Câu 147 đáp án A mới là đúng, hoặc Audio Part 1 bị rè..."
+                            style={{ borderRadius: 12 }}
+                        />
+                    </Form.Item>
                 </Form>
             </Modal>
         </div>

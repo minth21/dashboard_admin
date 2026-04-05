@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import {
     Card,
     Button,
@@ -11,10 +11,8 @@ import {
     message,
     Tag,
     Space,
-    Popconfirm,
     Select,
     Progress,
-    Upload,
     Row,
     Col,
 } from 'antd';
@@ -22,49 +20,42 @@ import {
     ArrowLeftOutlined,
     PlusOutlined, // Added
     EditOutlined,
-    DeleteOutlined,
     FileTextOutlined,
-    UploadOutlined,
     ClockCircleOutlined,
     SafetyCertificateOutlined,
     QuestionCircleOutlined,
     PlusCircleOutlined,
     BookOutlined,
+    CheckCircleOutlined,
+    EyeOutlined,
+    LockOutlined,
+    UnlockOutlined,
+    EyeInvisibleOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { testApi, partApi, uploadApi } from '../services/api';
+import { testApi, partApi, type Test, type Part } from '../services/api';
 import InstructionEditor from '../components/InstructionEditor';
 
 const { Option } = Select;
 
-interface Test {
+interface User {
     id: string;
-    title: string;
-    testType: 'LISTENING' | 'READING';
-    difficulty: 'EASY' | 'MEDIUM' | 'HARD';
-    status: 'LOCKED' | 'UNLOCKED';
-    duration: number;
-    totalQuestions: number;
-    createdAt: string;
-    updatedAt: string;
+    email: string;
+    fullName: string;
+    role: 'ADMIN' | 'SPECIALIST' | 'TEACHER' | 'STUDENT';
+    avatarUrl?: string;
 }
 
-interface Part {
-    id: string;
-    testId: string;
+interface PartFormValues {
     partNumber: number;
     partName: string;
     totalQuestions: number;
-    instructions?: string;
-    instructionImgUrl?: string;
-    status: 'ACTIVE' | 'INACTIVE';
-    orderIndex: number;
-    completedQuestions: number;
-    createdAt: string;
-    updatedAt: string;
-    timeLimit?: number; // in seconds
-    audioUrl?: string;
+    timeLimitHours?: number;
+    timeLimitMinutes?: number;
+    timeLimitSeconds?: number;
+    orderIndex?: number;
 }
+
 
 // Auto-fill configuration for parts
 const PART_CONFIG: Record<number, { name: string; totalQuestions: number; timeLimit: number }> = {
@@ -78,6 +69,12 @@ const PART_CONFIG: Record<number, { name: string; totalQuestions: number; timeLi
 };
 
 export default function TestDetail() {
+    const { user } = useOutletContext<{ user: User }>();
+    const isAdmin = user?.role === 'ADMIN';
+    const isSpecialist = user?.role === 'SPECIALIST';
+    const isTeacher = user?.role === 'TEACHER';
+    const canEditOrCreate = isAdmin || isSpecialist || isTeacher;
+
     const { testId } = useParams<{ testId: string }>();
     const navigate = useNavigate();
     const [test, setTest] = useState<Test | null>(null);
@@ -95,48 +92,60 @@ export default function TestDetail() {
     const [createInstructions, setCreateInstructions] = useState('');
     const [editInstructions, setEditInstructions] = useState('');
 
-    // Part Audio Edit State
-    const [editPartAudioFileList, setEditPartAudioFileList] = useState<any[]>([]);
+    // Cascading Approval State - REMOVED handleApproveAll but keeping approving for individual actions
+    const [approving, setApproving] = useState(false);
 
-    // Bulk Actions State
-    const [selectedPartIds, setSelectedPartIds] = useState<string[]>([]);
+    // Rejection State
+    const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+    const [rejectReason, setRejectReason] = useState('');
+    const [rejecting, setRejecting] = useState(false);
 
-    useEffect(() => {
-        if (testId) {
-            fetchTest();
-            fetchParts();
-        }
-    }, [testId]);
+    // Helper to check if HTML content is really empty
+    const isHtmlEmpty = (html: string) => {
+        if (!html) return true;
+        const stripped = html.replace(/<[^>]*>?/gm, '').trim();
+        return stripped === '';
+    };
 
-    const fetchTest = async () => {
+
+    const fetchTest = useCallback(async () => {
         try {
             const data = await testApi.getDetails(testId!);
             if (data.success) {
                 setTest(data.test);
             }
-        } catch (error) {
-            message.error('Không thể tải thông tin đề thi');
+        } catch (err) {
+            console.error('Error fetching test details:', err);
         }
-    };
+    }, [testId]);
 
-    const fetchParts = async () => {
+    const fetchParts = useCallback(async () => {
         setLoading(true);
         try {
             const data = await testApi.getParts(testId!);
             if (data.success) {
                 setParts(data.parts || []);
             }
-        } catch (error) {
-            message.error('Không thể tải danh sách Parts');
+        } catch (err) {
+            console.error('Error fetching parts:', err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [testId]);
 
-    const handleCreatePart = async (values: any) => {
-        // Validate instructions
-        if (!createInstructions || createInstructions.trim() === '') {
-            message.error('Vui lòng nhập hướng dẫn cho Part này');
+    useEffect(() => {
+        if (testId) {
+            fetchTest();
+            fetchParts();
+        }
+    }, [testId, fetchTest, fetchParts]);
+
+
+    const handleCreatePart = async (values: PartFormValues) => {
+        // Validate instructions for Reading Parts (5, 6, 7)
+        const isReadingPart = [5, 6, 7].includes(values.partNumber);
+        if (isReadingPart && isHtmlEmpty(createInstructions)) {
+            message.error(`Vui lòng nhập hướng dẫn cho Part ${values.partNumber}`);
             return;
         }
 
@@ -144,17 +153,17 @@ export default function TestDetail() {
             // Calculate timeLimit (minutes * 60 + seconds)
             const timeLimit = (values.timeLimitMinutes || 0) * 60 + (values.timeLimitSeconds || 0);
 
+            // Remove temp fields
+            const valuesToSubmit = { ...values };
+            delete (valuesToSubmit as Record<string, unknown>).timeLimitHours;
+            delete (valuesToSubmit as Record<string, unknown>).timeLimitMinutes;
+            delete (valuesToSubmit as Record<string, unknown>).timeLimitSeconds;
+
             const data = await partApi.create(testId!, {
-                ...values,
+                ...valuesToSubmit,
                 timeLimit,
                 instructions: createInstructions,
-                status: 'INACTIVE', // Default to inactive when creating
             });
-
-            // Remove temp fields
-            delete (values as any).timeLimitHours;
-            delete (values as any).timeLimitMinutes;
-            delete (values as any).timeLimitSeconds;
 
             if (data.success) {
                 message.success('Tạo Part thành công!');
@@ -165,7 +174,8 @@ export default function TestDetail() {
             } else {
                 message.error(data.message || 'Không thể tạo Part');
             }
-        } catch (error) {
+        } catch (error: unknown) {
+            console.error('Error creating part:', error);
             message.error('Có lỗi xảy ra khi tạo Part');
         }
     };
@@ -174,17 +184,6 @@ export default function TestDetail() {
         setEditingPart(part);
         setEditInstructions(part.instructions || '');
 
-        // Initialize audio file list if part has audioUrl
-        if (part.audioUrl) {
-            setEditPartAudioFileList([{
-                uid: '-1',
-                name: 'Audio hiện tại',
-                status: 'done',
-                url: part.audioUrl,
-            }]);
-        } else {
-            setEditPartAudioFileList([]);
-        }
 
         form.setFieldsValue({
             partNumber: part.partNumber,
@@ -193,50 +192,39 @@ export default function TestDetail() {
             timeLimitMinutes: Math.floor((part.timeLimit || 0) / 60),
             timeLimitSeconds: (part.timeLimit || 0) % 60,
             orderIndex: part.orderIndex,
-            status: part.status,
         });
         setEditModalVisible(true);
     };
 
-    const handleUpdatePart = async (values: any) => {
+    const handleUpdatePart = async (values: PartFormValues) => {
         if (!editingPart) return;
 
-        // Validate instructions
-        if (!editInstructions || editInstructions.trim() === '') {
-            message.error('Vui lòng nhập hướng dẫn cho Part này');
+        // Validate instructions for Reading Parts (5, 6, 7)
+        const isReadingPart = [5, 6, 7].includes(values.partNumber);
+        if (isReadingPart && isHtmlEmpty(editInstructions)) {
+            message.error(`Part ${values.partNumber} bắt buộc phải có hướng dẫn`);
             return;
         }
 
         try {
             let infoAudioUrl = editingPart.audioUrl;
 
-            // Handle Audio Upload if changed
-            if (editPartAudioFileList.length > 0 && editPartAudioFileList[0].originFileObj) {
-                const audioRes = await uploadApi.audio(editPartAudioFileList[0].originFileObj);
-                if (audioRes.success) {
-                    infoAudioUrl = audioRes.url;
-                } else {
-                    message.error('Upload audio thất bại');
-                    return;
-                }
-            } else if (editPartAudioFileList.length === 0) {
-                infoAudioUrl = undefined; // Removed audio
-            }
 
             // Calculate timeLimit (minutes * 60 + seconds)
             const timeLimit = (values.timeLimitMinutes || 0) * 60 + (values.timeLimitSeconds || 0);
 
+            // Remove temp fields
+            const valuesToSubmit = { ...values };
+            delete (valuesToSubmit as Record<string, unknown>).timeLimitHours;
+            delete (valuesToSubmit as Record<string, unknown>).timeLimitMinutes;
+            delete (valuesToSubmit as Record<string, unknown>).timeLimitSeconds;
+
             const data = await partApi.update(editingPart.id, {
-                ...values,
+                ...valuesToSubmit,
                 timeLimit,
                 instructions: editInstructions,
                 audioUrl: infoAudioUrl,
             });
-
-            // Remove temp fields
-            delete (values as any).timeLimitHours;
-            delete (values as any).timeLimitMinutes;
-            delete (values as any).timeLimitSeconds;
 
             if (data.success) {
                 message.success('Cập nhật Part thành công!');
@@ -248,90 +236,101 @@ export default function TestDetail() {
             } else {
                 message.error(data.message || 'Không thể cập nhật Part');
             }
-        } catch (error) {
+        } catch (error: unknown) {
+            console.error('Error updating part:', error);
             message.error('Có lỗi xảy ra khi cập nhật Part');
         }
     };
+
+    const handleTogglePartLock = async (part: Part) => {
+        const isCurrentlyActive = part.status === 'ACTIVE';
+        const actionText = isCurrentlyActive ? 'khóa' : 'mở khóa';
+
+        Modal.confirm({
+            title: `Xác nhận ${actionText} phần thi`,
+            content: `Bạn có chắc chắn muốn ${actionText} "${part.partName}"? ${isCurrentlyActive ? 'Sinh viên sẽ không nhìn thấy phần thi này trên App.' : 'Sinh viên sẽ có thể làm bài phần này ngay lập tức.'}`,
+            okText: isCurrentlyActive ? 'Khóa ngay' : 'Mở khóa',
+            okType: isCurrentlyActive ? 'danger' : 'primary',
+            centered: true,
+            onOk: async () => {
+                try {
+                    const data = await partApi.toggleLock(part.id);
+                    if (data.success) {
+                        message.success(`Đã ${actionText} phần thi thành công!`);
+                        fetchParts();
+                    } else {
+                        message.error(data.message || `Không thể ${actionText} phần thi`);
+                    }
+                } catch (error: unknown) {
+                    console.error(`Error toggling part lock:`, error);
+                    message.error(`Có lỗi xảy ra khi ${actionText} phần thi`);
+                }
+            }
+        });
+    };
+
 
     const handleViewDetails = (part: Part) => {
         navigate(`/exam-bank/${testId}/parts/${part.id}`);
     };
 
-    const handleBulkActivate = async () => {
-        if (selectedPartIds.length === 0) {
-            message.warning('Vui lòng chọn ít nhất một Part');
-            return;
-        }
 
-        try {
-            const promises = selectedPartIds.map(partId =>
-                partApi.update(partId, { status: 'ACTIVE' })
-            );
 
-            await Promise.all(promises);
-            message.success(`Đã kích hoạt ${selectedPartIds.length} Part`);
-            setSelectedPartIds([]);
-            fetchParts();
-        } catch (error) {
-            message.error('Có lỗi xảy ra khi kích hoạt hàng loạt');
-        }
-    };
+    const handleApproveTest = async () => {
+        if (!test) return;
 
-    const handleBulkDeactivate = async () => {
-        if (selectedPartIds.length === 0) {
-            message.warning('Vui lòng chọn ít nhất một Part');
-            return;
-        }
-
-        try {
-            const promises = selectedPartIds.map(partId =>
-                partApi.update(partId, { status: 'INACTIVE' })
-            );
-
-            await Promise.all(promises);
-            message.success(`Đã vô hiệu hóa ${selectedPartIds.length} Part`);
-            setSelectedPartIds([]);
-            fetchParts();
-        } catch (error) {
-            message.error('Có lỗi xảy ra khi vô hiệu hóa hàng loạt');
-        }
-    };
-
-    const handleDelete = async (partId: string) => {
-        try {
-            // First, check how many questions this Part has
-            const data = await partApi.getQuestions(partId);
-            const questionCount = data.questions?.length || 0;
-
-            if (questionCount > 0) {
-                // Part has questions - show warning and redirect to question management
-                const partToDelete = parts.find(p => p.id === partId);
-                Modal.warning({
-                    title: 'Không thể xóa Part',
-                    content: `Part này có ${questionCount} câu hỏi. Bạn cần xóa câu hỏi trước khi xóa Part.`,
-                    okText: 'Quản lý câu hỏi',
-                    onOk: () => {
-                        // Redirect to the new Part Detail page
-                        if (partToDelete) {
-                            navigate(`/exam-bank/${testId}/parts/${partToDelete.id}`);
-                        }
-                    },
-                });
-            } else {
-                // No questions - just delete the Part
-                const data = await partApi.delete(partId);
-
-                if (data.success) {
-                    message.success('Xóa Part thành công!');
-                    fetchParts();
-                } else {
-                    message.error(data.message || 'Không thể xóa Part');
+        Modal.confirm({
+            title: 'Xác nhận duyệt đề thi',
+            content: `Bạn có chắc chắn muốn duyệt và xuất bản đề thi "${test.title}"? Toàn bộ các phần thi và câu hỏi bên trong sẽ được kích hoạt để học viên làm bài.`,
+            okText: 'Duyệt toàn bộ',
+            okType: 'primary',
+            onOk: async () => {
+                setApproving(true);
+                try {
+                    const data = await testApi.approveFull(test.id);
+                    if (data.success) {
+                        message.success('Đã duyệt và xuất bản toàn bộ đề thi thành công!');
+                        fetchTest();
+                        fetchParts();
+                    } else {
+                        message.error(data.message || 'Không thể duyệt đề thi');
+                    }
+                } catch (error: unknown) {
+                    console.error('Error approving test:', error);
+                    message.error('Có lỗi xảy ra khi duyệt đề thi');
+                } finally {
+                    setApproving(false);
                 }
             }
-        } catch (error) {
-            message.error('Có lỗi xảy ra khi xóa Part');
+        });
+    };
+
+    const handleConfirmReject = async () => {
+        if (!test || !rejectReason.trim()) {
+            message.warning('Vui lòng nhập lý do từ chối');
+            return;
+        }
+
+        setRejecting(true);
+        try {
+            const data = await testApi.reject(test.id, rejectReason);
+            if (data.success) {
+                message.success('Đã từ chối đề thi thành công');
+                setIsRejectModalOpen(false);
+                fetchTest();
+                fetchParts();
+            } else {
+                message.error(data.message || 'Không thể từ chối đề thi');
+            }
+        } catch (error: unknown) {
+            console.error('Error rejecting test:', error);
+            message.error('Có lỗi xảy ra khi từ chối đề thi');
+        } finally {
+            setRejecting(false);
         }
     };
+
+
 
     const columns: ColumnsType<Part> = [
         {
@@ -339,15 +338,15 @@ export default function TestDetail() {
             dataIndex: 'partNumber',
             key: 'partNumber',
             width: 120,
-            align: 'center',
-            render: (num) => (
+            align: 'center' as const,
+            render: (num: number) => (
                 <div style={{
                     background: '#F1F5F9',
                     color: '#475569',
                     display: 'inline-block',
                     padding: '4px 12px',
                     borderRadius: '8px',
-                    fontWeight: 800,
+                    fontWeight: 600,
                     fontSize: '13px',
                     textAlign: 'center',
                     border: '1px solid #E2E8F0'
@@ -361,9 +360,9 @@ export default function TestDetail() {
             dataIndex: 'partName',
             key: 'partName',
             width: 250,
-            align: 'center',
-            render: (name) => (
-                <div style={{ fontWeight: 700, color: '#1E3A8A', textAlign: 'center' }}>
+            align: 'center' as const,
+            render: (name: string) => (
+                <div style={{ fontWeight: 600, color: '#1E3A8A', textAlign: 'center' }}>
                     {name.replace(/^Part \d+: /, '')}
                 </div>
             ),
@@ -373,16 +372,16 @@ export default function TestDetail() {
             dataIndex: 'totalQuestions',
             key: 'totalQuestions',
             width: 100,
-            align: 'center',
-            render: (total) => <span style={{ fontWeight: 700, color: '#64748B' }}>{total} câu</span>,
+            align: 'center' as const,
+            render: (total: number) => <span style={{ fontWeight: 600, color: '#64748B' }}>{total} câu</span>,
         },
         {
             title: 'Thời gian',
             dataIndex: 'timeLimit',
             key: 'timeLimit',
             width: 140,
-            align: 'center',
-            render: (timeLimit) => {
+            align: 'center' as const,
+            render: (timeLimit: number) => {
                 if (!timeLimit) return <Tag>Không giới hạn</Tag>;
                 const m = Math.floor(timeLimit / 60);
                 const s = timeLimit % 60;
@@ -395,11 +394,32 @@ export default function TestDetail() {
             },
         },
         {
+            title: 'Trạng thái',
+            key: 'status',
+            width: 140,
+            align: 'center' as const,
+            render: (_unused: unknown, record: Part) => {
+                const status = record.status;
+                const config: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
+                    ACTIVE: { color: 'green', label: 'Công khai', icon: <UnlockOutlined /> },
+                    LOCKED: { color: 'red', label: 'Đang khóa', icon: <LockOutlined /> },
+                    PENDING: { color: 'orange', label: 'Chờ duyệt', icon: <ClockCircleOutlined /> },
+                    REJECTED: { color: 'magenta', label: 'Sửa lại', icon: <EyeInvisibleOutlined /> },
+                };
+                const item = config[status] || { color: 'default', label: status, icon: null };
+                return (
+                    <Tag icon={item.icon} color={item.color} style={{ borderRadius: '12px', fontWeight: 600, padding: '2px 8px' }}>
+                        {item.label}
+                    </Tag>
+                );
+            },
+        },
+        {
             title: 'Hoàn thiện',
             key: 'progress',
             width: 180,
-            align: 'center',
-            render: (_, record) => {
+            align: 'center' as const,
+            render: (_unused: unknown, record: Part) => {
                 const percent = Math.round((record.completedQuestions / record.totalQuestions) * 100);
                 return (
                     <div style={{ padding: '0 8px' }}>
@@ -420,72 +440,52 @@ export default function TestDetail() {
             },
         },
         {
-            title: 'Trạng thái',
-            dataIndex: 'status',
-            key: 'status',
-            width: 120,
-            align: 'center',
-            render: (status) => (
-                <div style={{
-                    background: status === 'ACTIVE' ? '#ECFDF5' : '#FEF2F2',
-                    color: status === 'ACTIVE' ? '#059669' : '#DC2626',
-                    padding: '4px 10px',
-                    borderRadius: '20px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    fontWeight: 700,
-                    gap: 6,
-                    fontSize: '12px'
-                }}>
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
-                    {status === 'ACTIVE' ? 'ĐANG MỞ' : 'KHÓA'}
-                </div>
-            ),
-        },
-        {
             title: 'Hành động',
             key: 'actions',
-            width: 150,
-            align: 'center',
-            fixed: 'right',
-            render: (_, record) => (
+            width: 180,
+            align: 'center' as const,
+            fixed: 'right' as const,
+            render: (_unused: unknown, record: Part) => (
                 <Space>
                     <Button
                         type="text"
-                        style={{ color: '#3B82F6', background: '#EFF6FF', borderRadius: '8px' }}
-                        icon={<FileTextOutlined />}
+                        style={{ color: '#2563EB', background: '#EFF6FF', borderRadius: '8px' }}
+                        icon={<EyeOutlined />}
                         onClick={() => handleViewDetails(record)}
-                        title="Import câu hỏi"
+                        title="Xem chi tiết"
                     />
-                    <Button
-                        type="text"
-                        style={{ color: '#059669', background: '#ECFDF5', borderRadius: '8px' }}
-                        icon={<EditOutlined />}
-                        onClick={() => handleEdit(record)}
-                    />
-                    <Popconfirm
-                        title="Xác nhận xóa Part?"
-                        onConfirm={() => handleDelete(record.id)}
-                        okText="Xóa"
-                        cancelText="Hủy"
-                    >
+                    {canEditOrCreate && (
                         <Button
                             type="text"
-                            danger
-                            style={{ background: '#FEF2F2', borderRadius: '8px' }}
-                            icon={<DeleteOutlined />}
+                            style={{ color: '#059669', background: '#ECFDF5', borderRadius: '8px' }}
+                            icon={<EditOutlined />}
+                            onClick={() => handleEdit(record)}
+                            title="Chỉnh sửa"
                         />
-                    </Popconfirm>
+                    )}
+                    {isAdmin && (record.status === 'ACTIVE' || record.status === 'LOCKED') && (
+                        <Button
+                            type="text"
+                            style={{ 
+                                color: record.status === 'ACTIVE' ? '#D97706' : '#2563EB', 
+                                background: record.status === 'ACTIVE' ? '#FFFBEB' : '#EFF6FF', 
+                                borderRadius: '8px' 
+                            }}
+                            icon={record.status === 'ACTIVE' ? <LockOutlined /> : <UnlockOutlined />}
+                            onClick={() => handleTogglePartLock(record)}
+                            title={record.status === 'ACTIVE' ? 'Khóa Part' : 'Mở khóa Part'}
+                        />
+                    )}
                 </Space>
             ),
         },
     ];
 
-    const getDifficultyLabel = (difficulty: string) => {
-        const map: any = {
-            EASY: 'A1-A2',
-            MEDIUM: 'B1-B2',
-            HARD: 'C1',
+    const getDifficultyLabel = (difficulty: 'A1_A2' | 'B1_B2' | 'C1') => {
+        const map: Record<string, string> = {
+            A1_A2: 'A1-A2',
+            B1_B2: 'B1-B2',
+            C1: 'C1',
         };
         return map[difficulty] || difficulty;
     };
@@ -497,8 +497,8 @@ export default function TestDetail() {
         return (
             <>
                 <div style={{ marginBottom: 16 }}>
-                    <p style={{ color: '#666', marginBottom: 8 }}>
-                        Viết hướng dẫn cho học viên khi làm bài Part này.
+                    <p style={{ color: '#666', marginBottom: 8, fontSize: '13px' }}>
+                        Gợi ý: Viết hướng dẫn cho học viên khi làm bài Part này.
                         Bạn có thể chèn ảnh minh họa trực tiếp vào nội dung.
                     </p>
                 </div>
@@ -515,7 +515,7 @@ export default function TestDetail() {
     return (
         <div style={{ padding: '24px', background: '#F8FAFC', minHeight: '100vh' }}>
             {/* Header */}
-            <div style={{ marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Button
                     size="large"
                     icon={<ArrowLeftOutlined />}
@@ -524,7 +524,38 @@ export default function TestDetail() {
                 >
                     Quay lại danh sách
                 </Button>
+
+                <Space>
+                    {isAdmin && (test?.status === 'PENDING' || test?.status === 'REJECTED') && (
+                        <>
+                            <Button
+                                size="large"
+                                type="primary"
+                                icon={<CheckCircleOutlined />}
+                                onClick={handleApproveTest}
+                                loading={approving}
+                                style={{ borderRadius: 12, fontWeight: 600, background: '#10B981', border: 'none' }}
+                            >
+                                Duyệt toàn bộ
+                            </Button>
+                            <Button
+                                size="large"
+                                danger
+                                icon={<EyeInvisibleOutlined />}
+                                onClick={() => {
+                                    setRejectReason('');
+                                    setIsRejectModalOpen(true);
+                                }}
+                                style={{ borderRadius: 12, fontWeight: 600 }}
+                            >
+                                Từ chối
+                            </Button>
+                        </>
+                    )}
+                </Space>
             </div>
+
+            {/* Cascading Approval Banner - REMOVED per CTO Pivot */}
 
             {test && (
                 <Card
@@ -566,17 +597,42 @@ export default function TestDetail() {
                                 <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 14 }}>Mã đề: {test?.id}</div>
                             </div>
                         </Space>
-                        <Tag color={test?.status === 'UNLOCKED' ? 'success' : 'error'} style={{
-                            borderRadius: '30px',
+                        <div style={{
+                            background: test?.status === 'ACTIVE' ? '#ECFDF5' : (test?.status === 'PENDING' ? '#FFFBEB' : '#FEF2F2'),
+                            color: test?.status === 'ACTIVE' ? '#059669' : (test?.status === 'PENDING' ? '#D97706' : '#DC2626'),
                             padding: '4px 16px',
+                            borderRadius: '30px',
                             fontWeight: 700,
-                            border: 'none',
-                            fontSize: 13,
-                            boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                            fontSize: '13px',
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            border: `1px solid currentColor`
                         }}>
-                            {test?.status === 'UNLOCKED' ? 'ĐANG MỞ' : 'ĐANG KHÓA'}
-                        </Tag>
+                            {test?.status === 'ACTIVE' ? <UnlockOutlined /> : (test?.status === 'PENDING' ? <ClockCircleOutlined /> : (test?.status === 'REJECTED' ? <EyeInvisibleOutlined /> : <LockOutlined />))}
+                            {test?.status === 'ACTIVE' ? 'ĐANG MỞ' : (test?.status === 'PENDING' ? 'CHỜ DUYỆT' : (test?.status === 'REJECTED' ? 'BỊ TỪ CHỐI' : 'ĐANG KHÓA'))}
+                        </div>
                     </div>
+
+                    {test?.status === 'REJECTED' && test.rejectReason && (
+                        <div style={{
+                            background: '#FEF2F2',
+                            padding: '12px 32px',
+                            borderBottom: '1px solid #FEE2E2',
+                            color: '#991B1B',
+                            fontSize: '14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12
+                        }}>
+                            <EyeInvisibleOutlined style={{ fontSize: 18 }} />
+                            <div style={{ flex: 1 }}>
+                                <span style={{ fontWeight: 700 }}>Lý do từ chối: </span>
+                                {test.rejectReason}
+                            </div>
+                        </div>
+                    )}
 
                     <div style={{ padding: '32px' }}>
                         <Row gutter={[40, 24]}>
@@ -621,23 +677,48 @@ export default function TestDetail() {
                 </Card>
             )}
 
+            {/* Primary Action */}
+            {canEditOrCreate && (
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-start' }}>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => setCreateModalVisible(true)}
+                        size="large"
+                        style={{
+                            borderRadius: 12,
+                            fontWeight: 600,
+                            height: 48,
+                            padding: '0 24px',
+                            background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                            border: 'none',
+                            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                        }}
+                    >
+                        Tạo Part mới
+                    </Button>
+                </div>
+            )}
+
             {/* Parts Table */}
             <Card
                 title={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 8,
-                            background: '#F1F5F9',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#475569'
-                        }}>
-                            <PlusCircleOutlined />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 8,
+                                background: '#F1F5F9',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#475569'
+                            }}>
+                                <PlusCircleOutlined />
+                            </div>
+                            <span style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>Cấu trúc đề thi</span>
                         </div>
-                        <span style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>Cấu trúc đề thi</span>
                     </div>
                 }
                 style={{
@@ -646,50 +727,7 @@ export default function TestDetail() {
                     boxShadow: modernShadow,
                     background: '#FFFFFF'
                 }}
-                extra={
-                    <Space size="middle">
-                        {selectedPartIds.length > 0 && (
-                            <div style={{
-                                background: '#F1F5F9',
-                                padding: '4px 8px',
-                                borderRadius: '10px',
-                                display: 'flex',
-                                gap: 8
-                            }}>
-                                <Button
-                                    type="text"
-                                    onClick={handleBulkActivate}
-                                    style={{ color: '#059669', fontWeight: 600, fontSize: 13 }}
-                                >
-                                    Mở ({selectedPartIds.length})
-                                </Button>
-                                <Button
-                                    type="text"
-                                    danger
-                                    onClick={handleBulkDeactivate}
-                                    style={{ fontWeight: 600, fontSize: 13 }}
-                                >
-                                    Khóa ({selectedPartIds.length})
-                                </Button>
-                            </div>
-                        )}
-                        <Button
-                            type="primary"
-                            icon={<PlusOutlined />}
-                            onClick={() => setCreateModalVisible(true)}
-                            size="large"
-                            style={{
-                                borderRadius: 12,
-                                fontWeight: 700,
-                                background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
-                                border: 'none',
-                                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
-                            }}
-                        >
-                            Tạo Part mới
-                        </Button>
-                    </Space>
-                }
+
                 bodyStyle={{ padding: 0 }}
             >
                 <Table
@@ -698,10 +736,6 @@ export default function TestDetail() {
                     rowKey="id"
                     loading={loading}
                     pagination={false}
-                    rowSelection={{
-                        selectedRowKeys: selectedPartIds,
-                        onChange: (selectedKeys) => setSelectedPartIds(selectedKeys as string[]),
-                    }}
                     style={{ borderRadius: '0 0 24px 24px' }}
                 />
             </Card>
@@ -883,7 +917,6 @@ export default function TestDetail() {
                     setEditingPart(null);
                     setEditInstructions('');
                     form.resetFields();
-                    setEditPartAudioFileList([]);
                 }}
                 onOk={() => form.submit()}
                 okText="Cập nhật thông tin"
@@ -942,7 +975,7 @@ export default function TestDetail() {
                     </Row>
 
                     <Row gutter={24}>
-                        <Col span={12}>
+                        <Col span={24}>
                             <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Thời gian giới hạn</span>} required>
                                 <Space align="baseline" style={{ display: 'flex' }}>
                                     <Form.Item
@@ -960,35 +993,7 @@ export default function TestDetail() {
                                 </Space>
                             </Form.Item>
                         </Col>
-                        <Col span={12}>
-                            <Form.Item name="status" label={<span style={{ fontWeight: 600, color: '#475569' }}>Trạng thái</span>} initialValue="ACTIVE">
-                                <Select size="large" style={{ borderRadius: 10 }}>
-                                    <Option value="ACTIVE">Mở (Hoạt động)</Option>
-                                    <Option value="INACTIVE">Khóa (Tạm dừng)</Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
                     </Row>
-
-                    {/* Audio Upload - Only for Listening Parts (1-4) */}
-                    {editingPart && editingPart.partNumber >= 1 && editingPart.partNumber <= 4 && (
-                        <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Audio tập tin</span>}>
-                            <div style={{ padding: '16px', background: '#F8FAFC', borderRadius: 12, border: '1px dashed #CBD5E1' }}>
-                                <Upload
-                                    fileList={editPartAudioFileList}
-                                    beforeUpload={(file) => {
-                                        setEditPartAudioFileList([file]);
-                                        return false;
-                                    }}
-                                    onRemove={() => setEditPartAudioFileList([])}
-                                    maxCount={1}
-                                    accept="audio/*"
-                                >
-                                    <Button size="large" icon={<UploadOutlined />} style={{ borderRadius: 8 }}>Chọn tệp Audio mới</Button>
-                                </Upload>
-                            </div>
-                        </Form.Item>
-                    )}
 
                     <Form.Item label={<span style={{ fontWeight: 600, color: '#475569' }}>Hướng dẫn làm bài (bắt buộc)</span>} required>
                         <div style={{ padding: '4px', border: '1px solid #E2E8F0', borderRadius: 12 }}>
@@ -1004,6 +1009,35 @@ export default function TestDetail() {
                     <Form.Item name="orderIndex" hidden><InputNumber /></Form.Item>
                 </Form>
             </Modal>
-        </div >
+
+            {/* Reject Reason Modal */}
+            <Modal
+                title={
+                    <Space>
+                        <EyeInvisibleOutlined style={{ color: '#DC2626' }} />
+                        <span style={{ fontWeight: 700 }}>Từ chối phê duyệt đề thi</span>
+                    </Space>
+                }
+                open={isRejectModalOpen}
+                onCancel={() => setIsRejectModalOpen(false)}
+                onOk={handleConfirmReject}
+                confirmLoading={rejecting}
+                okText="Xác nhận từ chối"
+                okButtonProps={{ danger: true, style: { borderRadius: 8 } }}
+                cancelButtonProps={{ style: { borderRadius: 8 } }}
+                centered
+            >
+                <div style={{ marginBottom: 16, color: '#64748B' }}>
+                    Vui lòng nhập lý do từ chối để Chuyên viên có thể nắm được thông tin và chỉnh sửa.
+                </div>
+                <Input.TextArea
+                    rows={4}
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Ví dụ: Audio bị rè, Câu hỏi 102 thiếu đáp án đúng, Nội dung dịch chưa sát nghĩa..."
+                    style={{ borderRadius: 8 }}
+                />
+            </Modal>
+        </div>
     );
 }

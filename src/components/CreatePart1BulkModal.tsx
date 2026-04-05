@@ -13,6 +13,8 @@ interface CreatePart1BulkModalProps {
     onSuccess: () => void;
     partId: string | null;
     currentAudioUrl?: string; // Added prop
+    partName?: string;
+    partNumber?: number;
 }
 
 interface QuestionDraft {
@@ -27,7 +29,7 @@ interface QuestionDraft {
     explanation?: string;
 }
 
-export default function CreatePart1BulkModal({ open, onCancel, onSuccess, partId, currentAudioUrl }: CreatePart1BulkModalProps) {
+export default function CreatePart1BulkModal({ open, onCancel, onSuccess, partId, currentAudioUrl, partName, partNumber }: CreatePart1BulkModalProps) {
     const [loading, setLoading] = useState(false);
 
     // Part Audio State
@@ -152,10 +154,7 @@ export default function CreatePart1BulkModal({ open, onCancel, onSuccess, partId
                     optionB: q.transcriptB || '(B)',
                     optionC: q.transcriptC || '(C)',
                     optionD: q.transcriptD || '(D)',
-                    explanation: q.explanation,
-                    // Store transcripts in explanation or separate fields if backend supported?
-                    // Currently backend schema doesn't seem to have explicit transcript fields for options A-D separate from `transcript` string.
-                    // We'll just stick to standard fields.
+                    explanation: q.explanation
                 };
 
                 return api.post(`/parts/${partId}/questions`, payload);
@@ -228,9 +227,10 @@ export default function CreatePart1BulkModal({ open, onCancel, onSuccess, partId
                             </Select>
                         </Form.Item>
 
+
                         <Row gutter={16}>
                             <Col span={12}>
-                                <Form.Item label="Option A">
+                                <Form.Item label="Đáp án A">
                                     <Input
                                         value={q.transcriptA}
                                         onChange={(e) => handleUpdateQuestion(index, 'transcriptA', e.target.value)}
@@ -239,7 +239,7 @@ export default function CreatePart1BulkModal({ open, onCancel, onSuccess, partId
                                 </Form.Item>
                             </Col>
                             <Col span={12}>
-                                <Form.Item label="Option B">
+                                <Form.Item label="Đáp án B">
                                     <Input
                                         value={q.transcriptB}
                                         onChange={(e) => handleUpdateQuestion(index, 'transcriptB', e.target.value)}
@@ -248,7 +248,7 @@ export default function CreatePart1BulkModal({ open, onCancel, onSuccess, partId
                                 </Form.Item>
                             </Col>
                             <Col span={12}>
-                                <Form.Item label="Option C">
+                                <Form.Item label="Đáp án C">
                                     <Input
                                         value={q.transcriptC}
                                         onChange={(e) => handleUpdateQuestion(index, 'transcriptC', e.target.value)}
@@ -257,7 +257,7 @@ export default function CreatePart1BulkModal({ open, onCancel, onSuccess, partId
                                 </Form.Item>
                             </Col>
                             <Col span={12}>
-                                <Form.Item label="Option D">
+                                <Form.Item label="Đáp án D">
                                     <Input
                                         value={q.transcriptD}
                                         onChange={(e) => handleUpdateQuestion(index, 'transcriptD', e.target.value)}
@@ -290,7 +290,13 @@ export default function CreatePart1BulkModal({ open, onCancel, onSuccess, partId
 
     return (
         <Modal
-            title={`Thêm câu hỏi Part 1 (Photographs)`}
+            title={
+                <div style={{ textAlign: 'center', width: '100%', fontSize: 20, fontWeight: 800, textTransform: 'uppercase', color: '#1E293B' }}>
+                    {partName
+                        ? (partName.toUpperCase().startsWith('PART') ? partName : `PART ${partNumber}: ${partName}`)
+                        : 'Thêm câu hỏi Part 1 (Photographs)'}
+                </div>
+            }
             open={open}
             onCancel={onCancel}
             width={1200}

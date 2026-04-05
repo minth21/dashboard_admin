@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Layout, Menu, Typography, Button, Space, Avatar, message, Upload } from 'antd';
+import { Layout, Menu, Typography, Button, Space, Avatar, message, Upload, Modal } from 'antd';
 import { userApi } from '../services/api';
 import {
     LogoutOutlined,
@@ -9,8 +9,18 @@ import {
     MenuFoldOutlined,
     MenuUnfoldOutlined,
     CameraOutlined,
+    BookOutlined,
+    TeamOutlined,
+    SunOutlined,
+    MoonOutlined,
+    FlagOutlined,
+    MessageOutlined,
 } from '@ant-design/icons';
+import { useTheme } from '../hooks/useThemeContext';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
+import ChangePasswordModal from '../components/ChangePasswordModal';
+import NotificationCenter from '../components/NotificationCenter';
+import { Dropdown } from 'antd';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -21,19 +31,36 @@ interface User {
     name: string;
     role: string;
     avatarUrl?: string;
+    isFirstLogin: boolean;
 }
+
+const ROLE_LABELS: Record<string, string> = {
+    ADMIN: 'Admin',
+    SPECIALIST: 'Chuyên viên',
+    TEACHER: 'Giáo viên',
+    STUDENT: 'Học viên',
+};
 
 export default function Dashboard() {
     const [user, setUser] = useState<User | null>(null);
     const [collapsed, setCollapsed] = useState(false);
     const [selectedMenu, setSelectedMenu] = useState('1');
+    const [isPassModalVisible, setIsPassModalVisible] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
+    const { theme, toggleTheme } = useTheme();
+    const isDark = theme === 'dark';
 
     useEffect(() => {
         const userData = localStorage.getItem('admin_user');
         if (userData) {
-            setUser(JSON.parse(userData));
+            const parsedUser = JSON.parse(userData);
+            setUser(parsedUser);
+            
+            // Tự động bật Modal đổi mật khẩu nếu là lần đầu đăng nhập (Ngoại trừ ADMIN)
+            if (parsedUser.isFirstLogin && parsedUser.role !== 'ADMIN') {
+                setIsPassModalVisible(true);
+            }
         } else {
             navigate('/login');
         }
@@ -46,33 +73,82 @@ export default function Dashboard() {
             setSelectedMenu('1');
         } else if (path === '/users') {
             setSelectedMenu('2');
+        } else if (path === '/classes') {
+            setSelectedMenu('4');
+        } else if (path === '/teacher/classes') {
+            setSelectedMenu('5');
         } else if (path.startsWith('/exam-bank')) {
             setSelectedMenu('3');
+        } else if (path === '/profile') {
+            setSelectedMenu('6');
+        } else if (path === '/complaints') {
+            setSelectedMenu('7');
+        } else if (path === '/class-feedback') {
+            setSelectedMenu('8');
         }
     }, [location.pathname]);
 
-    // Role-Based Redirects & Route Guarding
+    // ============================================
+    // STRICT ROLE-BASED ACCESS CONTROL (RBAC)
+    // ============================================
     useEffect(() => {
         if (!user) return;
         
         const path = location.pathname;
+        const role = user.role;
         
-        // Non-admins can't access Dashboard or User Management
-        if (user.role !== 'ADMIN') {
-            if (path === '/dashboard' || path === '/users' || path === '/') {
+        // 1. TEACHER (GV) Guard
+        if (role === 'TEACHER') {
+            const allowedPaths = ['/teacher/classes', '/exam-bank', '/profile', '/dashboard', '/complaints', '/class-feedback'];
+            const isAllowed = allowedPaths.some(p => path.startsWith(p));
+            
+            if (!isAllowed && path !== '/') {
+                message.error('Bạn không có quyền truy cập trang này. Chuyển về Ngân hàng đề.');
                 navigate('/exam-bank', { replace: true });
-                if (path !== '/') {
-                    message.warning('Bạn không có quyền truy cập trang này. Đã chuyển sang Ngân hàng đề.');
-                }
             }
+            // Redirect from / or /dashboard to /exam-bank for Teachers
+            if (path === '/' || path === '/dashboard') navigate('/exam-bank', { replace: true });
+        }
+        
+        // 2. SPECIALIST (CV) Guard
+        if (role === 'SPECIALIST') {
+            const forbiddenPaths = ['/users', '/classes', '/teacher/classes'];
+            const isForbidden = forbiddenPaths.some(p => path.startsWith(p));
+            
+            if (isForbidden) {
+                message.error('Chuyên viên không có quyền quản lý Người dùng/Lớp học/Học viên. Chuyển về Ngân hàng đề.');
+                navigate('/exam-bank', { replace: true });
+            }
+            // Redirect from / or /dashboard to /exam-bank for Specialists
+            if (path === '/' || path === '/dashboard') navigate('/exam-bank', { replace: true });
+        }
+
+        // 3. Prevent unauthorized direct access to sensitive paths (for other potential roles)
+        if (role === 'STUDENT' && path === '/dashboard') {
+             navigate('/exam-bank', { replace: true });
         }
     }, [location.pathname, user?.role, navigate]);
 
     const handleLogout = () => {
-        localStorage.removeItem('admin_token');
-        localStorage.removeItem('admin_user');
-        message.success('Đã đăng xuất thành công!');
-        navigate('/login');
+        Modal.confirm({
+            title: 'Xác nhận đăng xuất',
+            content: 'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?',
+            okText: 'Đăng xuất',
+            cancelText: 'Hủy',
+            okButtonProps: { 
+                danger: true,
+                style: { borderRadius: '8px', fontWeight: 600 }
+            },
+            cancelButtonProps: {
+                style: { borderRadius: '8px' }
+            },
+            onOk: () => {
+                localStorage.removeItem('admin_token');
+                localStorage.removeItem('admin_user');
+                message.success('Đã đăng xuất thành công!');
+                navigate('/login');
+            }
+        });
     };
 
     // Get menu title based on selected menu key
@@ -81,13 +157,18 @@ export default function Dashboard() {
             '1': 'TỔNG QUAN',
             '2': 'QUẢN LÝ NGƯỜI DÙNG',
             '3': 'NGÂN HÀNG ĐỀ THI',
+            '4': 'QUẢN LÝ LỚP HỌC',
+            '5': 'LỚP HỌC CỦA TÔI',
+            '6': 'HỒ SƠ CÁ NHÂN',
+            '7': 'QUẢN LÝ GÓP Ý',
+            '8': 'Ý KIẾN HỌC VIÊN',
         };
         return menuTitles[menuKey] || 'TỔNG QUAN';
     };
 
     const handleAvatarUpload = async (file: File) => {
         const formData = new FormData();
-        formData.append('avatar', file);
+        formData.append('image', file);
 
         try {
             const data = await userApi.updateAvatar(formData);
@@ -116,10 +197,98 @@ export default function Dashboard() {
         if (key === '1') navigate('/dashboard');
         if (key === '2') navigate('/users');
         if (key === '3') navigate('/exam-bank');
+        if (key === '4') navigate('/classes');
+        if (key === '5') navigate('/teacher/classes');
+        if (key === '6') navigate('/profile');
+        if (key === '7') navigate('/complaints');
+        if (key === '8') navigate('/class-feedback');
+    };
+
+    // ============================================
+    // DYNAMIC MENU ITEMS BASED ON ROLE
+    // ============================================
+    const getMenuItems = () => {
+        const role = user.role;
+        const items = [];
+
+        // 1. Dashboard (Overview) - Admin only
+        if (role === 'ADMIN') {
+            items.push({
+                key: '1',
+                icon: <DashboardOutlined style={{ fontSize: 20 }} />,
+                label: <span style={{ fontWeight: 600 }}>Tổng quan</span>,
+                style: { borderRadius: 12, marginBottom: 12, height: 54, display: 'flex', alignItems: 'center', fontSize: 15 },
+            });
+        }
+
+        // 2. User Management - Admin only
+        if (role === 'ADMIN') {
+            items.push({
+                key: '2',
+                icon: <UserOutlined style={{ fontSize: 20 }} />,
+                label: <span style={{ fontWeight: 600 }}>Quản lý người dùng</span>,
+                style: { borderRadius: 12, marginBottom: 12, height: 54, display: 'flex', alignItems: 'center', fontSize: 15 },
+            });
+        }
+
+        // 3. Class Management - Admin only
+        if (role === 'ADMIN') {
+            items.push({
+                key: '4',
+                icon: <BookOutlined style={{ fontSize: 20 }} />,
+                label: <span style={{ fontWeight: 600 }}>Quản lý lớp học</span>,
+                style: { borderRadius: 12, marginBottom: 12, height: 54, display: 'flex', alignItems: 'center', fontSize: 15 },
+            });
+        }
+
+        // 4. Exam Bank - All management roles
+        items.push({
+            key: '3',
+            icon: <HomeOutlined style={{ fontSize: 20 }} />,
+            label: <span style={{ fontWeight: 600 }}>Ngân hàng đề thi</span>,
+            style: { borderRadius: 12, marginBottom: 12, height: 54, display: 'flex', alignItems: 'center', fontSize: 15 },
+        });
+        // 5. My Classes - Teacher only
+        if (role === 'TEACHER') {
+            items.push({
+                key: '5',
+                icon: <TeamOutlined style={{ fontSize: 20 }} />,
+                label: <span style={{ fontWeight: 600 }}>Lớp học của tôi</span>,
+                style: { borderRadius: 12, marginBottom: 12, height: 54, display: 'flex', alignItems: 'center', fontSize: 15 },
+            });
+        }
+
+        // 6. Profile - All users
+        items.push({
+            key: '6',
+            icon: <UserOutlined style={{ fontSize: 20 }} />,
+            label: <span style={{ fontWeight: 600 }}>Hồ sơ cá nhân</span>,
+            style: { borderRadius: 12, marginBottom: 12, height: 54, display: 'flex', alignItems: 'center', fontSize: 15 },
+        });
+
+        // 7. Complaints - All management roles + Teacher
+        items.push({
+            key: '7',
+            icon: <FlagOutlined style={{ fontSize: 20 }} />,
+            label: <span style={{ fontWeight: 600 }}>Góp ý & Khiếu nại</span>,
+            style: { borderRadius: 12, marginBottom: 12, height: 54, display: 'flex', alignItems: 'center', fontSize: 15 },
+        });
+
+        // 8. Student Feedback - Teacher and Admin
+        if (role === 'TEACHER' || role === 'ADMIN') {
+            items.push({
+                key: '8',
+                icon: <MessageOutlined style={{ fontSize: 20 }} />,
+                label: <span style={{ fontWeight: 600 }}>Ý kiến học viên</span>,
+                style: { borderRadius: 12, marginBottom: 12, height: 54, display: 'flex', alignItems: 'center', fontSize: 15 },
+            });
+        }
+
+        return items;
     };
 
     return (
-        <Layout style={{ minHeight: '100vh', background: '#F0F9FF' }}>
+        <Layout style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
             {/* Sidebar */}
             <Sider
                 collapsible
@@ -130,15 +299,16 @@ export default function Dashboard() {
                 collapsedWidth="80"
                 width={260}
                 style={{
-                    background: '#FFFFFF',
-                    borderRight: '1px solid #E0F2FE',
+                    background: 'var(--sidebar-bg)',
+                    borderRight: `1px solid var(--border-color)`,
                     position: 'fixed',
                     height: '100vh',
                     left: 0,
                     top: 0,
                     bottom: 0,
                     zIndex: 100,
-                    boxShadow: '4px 0 24px rgba(30, 64, 175, 0.02)',
+                    boxShadow: 'var(--card-shadow)',
+                    transition: 'all 0.3s ease'
                 }}
             >
                 <div
@@ -167,53 +337,16 @@ export default function Dashboard() {
                     theme="light"
                     mode="inline"
                     selectedKeys={[selectedMenu]}
-                    onClick={({ key }) => handleMenuClick(key)}
+                    onClick={({ key }) => {
+                        setSelectedMenu(key);
+                        handleMenuClick(key);
+                    }}
                     style={{
                         background: 'transparent',
                         border: 'none',
                         padding: '0 12px'
                     }}
-                    items={[
-                        ...(user?.role === 'ADMIN' ? [{
-                            key: '1',
-                            icon: <DashboardOutlined style={{ fontSize: 20 }} />,
-                            label: <span style={{ fontWeight: 800 }}>Tổng quan</span>,
-                            style: {
-                                borderRadius: 12,
-                                marginBottom: 12,
-                                height: 54,
-                                display: 'flex',
-                                alignItems: 'center',
-                                fontSize: 15
-                            },
-                        }] : []),
-                        ...(user?.role === 'ADMIN' ? [{
-                            key: '2',
-                            icon: <UserOutlined style={{ fontSize: 20 }} />,
-                            label: <span style={{ fontWeight: 800 }}>Quản lý người dùng</span>,
-                            style: {
-                                borderRadius: 12,
-                                marginBottom: 12,
-                                height: 54,
-                                display: 'flex',
-                                alignItems: 'center',
-                                fontSize: 15
-                            },
-                        }] : []),
-                        {
-                            key: '3',
-                            icon: <HomeOutlined style={{ fontSize: 20 }} />,
-                            label: <span style={{ fontWeight: 800 }}>Ngân hàng đề thi</span>,
-                            style: {
-                                borderRadius: 12,
-                                marginBottom: 12,
-                                height: 54,
-                                display: 'flex',
-                                alignItems: 'center',
-                                fontSize: 15
-                            },
-                        },
-                    ]}
+                    items={getMenuItems()}
                 />
             </Sider>
 
@@ -222,24 +355,23 @@ export default function Dashboard() {
                 transition: 'all 0.2s',
                 background: 'transparent'
             }}>
-                {/* Floating Header */}
-                {/* Floating Header */}
                 <Header
                     style={{
                         margin: '16px 24px',
                         padding: '0 24px',
-                        background: 'rgba(255, 255, 255, 0.8)',
+                        background: 'var(--header-bg)',
                         backdropFilter: 'blur(12px)',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         borderRadius: 20,
-                        border: '1px solid rgba(255, 255, 255, 0.5)',
-                        boxShadow: '0 8px 32px rgba(30, 64, 175, 0.08)',
+                        border: `1px solid var(--border-color)`,
+                        boxShadow: 'var(--card-shadow)',
                         height: 70,
                         position: 'sticky',
                         top: 16,
                         zIndex: 90,
+                        transition: 'all 0.3s ease'
                     }}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -255,18 +387,38 @@ export default function Dashboard() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                background: '#F0F9FF',
-                                color: '#1E40AF'
+                                background: isDark ? '#334155' : '#F0F9FF',
+                                color: isDark ? '#F1F5F9' : '#1E40AF'
                             }}
                         />
-                        <Title level={4} style={{ margin: 0, color: '#1E3A8A', fontWeight: 700, letterSpacing: '-0.5px' }}>
+                        <Title level={4} style={{ margin: 0, color: isDark ? '#F1F5F9' : '#1E3A8A', fontWeight: 700, letterSpacing: '-0.5px' }}>
                             {getMenuTitle(selectedMenu)}
                         </Title>
                     </div>
 
                     <Space size="large">
-                        {/* User Info - Compact Version */}
+                        <Button
+                            type="text"
+                            icon={isDark ? <SunOutlined /> : <MoonOutlined />}
+                            onClick={toggleTheme}
+                            style={{
+                                width: 45,
+                                height: 45,
+                                borderRadius: 12,
+                                fontSize: '18px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: isDark ? '#334155' : '#F0F9FF',
+                                color: isDark ? '#FCD34D' : '#1E40AF', // Warm yellow for sun, blue for moon
+                                border: 'none'
+                            }}
+                        />
+
+                        <NotificationCenter />
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            {/* Avatar section - Trực tiếp click để upload */}
                             <Upload
                                 beforeUpload={handleAvatarUpload}
                                 showUploadList={false}
@@ -281,8 +433,8 @@ export default function Dashboard() {
                                                     : `http://localhost:3000${user.avatarUrl}`
                                                 : '/admin.jpg'
                                         }
-                                        size={40}
-                                        style={{ border: '2px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+                                        size={45}
+                                        style={{ border: '2px solid #fff', boxShadow: '0 4px 12px rgba(30, 64, 175, 0.15)' }}
                                         icon={<UserOutlined />}
                                     />
                                     <div
@@ -292,26 +444,53 @@ export default function Dashboard() {
                                             right: 0,
                                             background: '#3B82F6',
                                             borderRadius: '50%',
-                                            width: 14,
-                                            height: 14,
+                                            width: 16,
+                                            height: 16,
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             border: '2px solid white',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                                         }}
                                     >
-                                        <CameraOutlined style={{ fontSize: 8, color: 'white' }} />
+                                        <CameraOutlined style={{ fontSize: 9, color: 'white' }} />
                                     </div>
                                 </div>
                             </Upload>
-                            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                <span style={{ fontWeight: 700, color: '#1E293B', fontSize: 14, lineHeight: '1.2', marginBottom: 2 }}>
-                                    {user.name}
-                                </span>
-                                <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', lineHeight: '1' }}>
-                                    {user.role}
-                                </span>
-                            </div>
+
+                            {/* User Info & Settings Dropdown */}
+                            <Dropdown
+                                menu={{
+                                    items: [
+                                        {
+                                            key: 'profile',
+                                            label: <span style={{ fontWeight: 600 }}>👤 Hồ sơ cá nhân</span>,
+                                            onClick: () => navigate('/profile')
+                                        },
+                                        ...(user.role !== 'ADMIN' ? [{
+                                            key: 'change_password',
+                                            label: <span style={{ fontWeight: 600 }}>🔒 Đổi mật khẩu</span>,
+                                            onClick: () => setIsPassModalVisible(true)
+                                        }] : []),
+                                    ]
+                                }}
+                                trigger={['click']}
+                                disabled={user.role === 'ADMIN'} // Admin không có đổi mật khẩu thì disable dropdown
+                            >
+                                <div style={{ 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    justifyContent: 'center',
+                                    cursor: user.role !== 'ADMIN' ? 'pointer' : 'default'
+                                }}>
+                                    <span style={{ fontWeight: 800, color: isDark ? '#F1F5F9' : '#1E3A8A', fontSize: 15, lineHeight: '1.2', marginBottom: 2 }}>
+                                        {user.name}
+                                    </span>
+                                    <span style={{ fontSize: 11, color: '#3B82F6', fontWeight: 700, textTransform: 'uppercase', lineHeight: '1', letterSpacing: '0.5px' }}>
+                                        {ROLE_LABELS[user.role] || user.role}
+                                    </span>
+                                </div>
+                            </Dropdown>
                         </div>
 
                         <Button
@@ -324,7 +503,8 @@ export default function Dashboard() {
                                 fontWeight: 700,
                                 background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
                                 border: 'none',
-                                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)'
+                                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+                                padding: '0 20px'
                             }}
                         >
                             Đăng xuất
@@ -332,7 +512,22 @@ export default function Dashboard() {
                     </Space>
                 </Header>
 
-                {/* Main Content using Outlet */}
+                <ChangePasswordModal
+                    visible={isPassModalVisible}
+                    isForced={user.isFirstLogin}
+                    onCancel={() => {
+                        if (user.isFirstLogin && user.role !== 'ADMIN') {
+                            handleLogout();
+                        } else {
+                            setIsPassModalVisible(false);
+                        }
+                    }}
+                    onSuccess={() => {
+                        setIsPassModalVisible(false);
+                        handleLogout();
+                    }}
+                />
+
                 <Content style={{
                     margin: '8px 24px 24px',
                     padding: '0',
