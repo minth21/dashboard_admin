@@ -79,6 +79,8 @@ export default function Dashboard() {
             setSelectedMenu('5');
         } else if (path.startsWith('/exam-bank')) {
             setSelectedMenu('3');
+        } else if (path === '/teacher/materials') {
+            setSelectedMenu('3');
         } else if (path === '/profile') {
             setSelectedMenu('6');
         } else if (path === '/complaints') {
@@ -97,17 +99,16 @@ export default function Dashboard() {
         const path = location.pathname;
         const role = user.role;
         
-        // 1. TEACHER (GV) Guard
         if (role === 'TEACHER') {
-            const allowedPaths = ['/teacher/classes', '/exam-bank', '/profile', '/dashboard', '/complaints', '/class-feedback'];
+            const allowedPaths = ['/teacher/classes', '/teacher/materials', '/profile', '/dashboard', '/complaints', '/class-feedback'];
             const isAllowed = allowedPaths.some(p => path.startsWith(p));
             
             if (!isAllowed && path !== '/') {
-                message.error('Bạn không có quyền truy cập trang này. Chuyển về Ngân hàng đề.');
-                navigate('/exam-bank', { replace: true });
+                message.error('Bạn không có quyền truy cập trang này. Chuyển về Bài giảng và bài tập.');
+                navigate('/teacher/materials', { replace: true });
             }
-            // Redirect from / or /dashboard to /exam-bank for Teachers
-            if (path === '/' || path === '/dashboard') navigate('/exam-bank', { replace: true });
+            // Redirect from / or /dashboard to /teacher/materials for Teachers
+            if (path === '/' || path === '/dashboard' || path === '/exam-bank') navigate('/teacher/materials', { replace: true });
         }
         
         // 2. SPECIALIST (CV) Guard
@@ -153,10 +154,11 @@ export default function Dashboard() {
 
     // Get menu title based on selected menu key
     const getMenuTitle = (menuKey: string): string => {
+        const role = user?.role;
         const menuTitles: { [key: string]: string } = {
             '1': 'TỔNG QUAN',
             '2': 'QUẢN LÝ NGƯỜI DÙNG',
-            '3': 'NGÂN HÀNG ĐỀ THI',
+            '3': role === 'TEACHER' ? 'BÀI GIẢNG VÀ BÀI TẬP' : 'NGÂN HÀNG ĐỀ THI',
             '4': 'QUẢN LÝ LỚP HỌC',
             '5': 'LỚP HỌC CỦA TÔI',
             '6': 'HỒ SƠ CÁ NHÂN',
@@ -196,7 +198,10 @@ export default function Dashboard() {
     const handleMenuClick = (key: string) => {
         if (key === '1') navigate('/dashboard');
         if (key === '2') navigate('/users');
-        if (key === '3') navigate('/exam-bank');
+        if (key === '3') {
+            if (user?.role === 'TEACHER') navigate('/teacher/materials');
+            else navigate('/exam-bank');
+        }
         if (key === '4') navigate('/classes');
         if (key === '5') navigate('/teacher/classes');
         if (key === '6') navigate('/profile');
@@ -245,7 +250,7 @@ export default function Dashboard() {
         items.push({
             key: '3',
             icon: <HomeOutlined style={{ fontSize: 20 }} />,
-            label: <span style={{ fontWeight: 600 }}>Ngân hàng đề thi</span>,
+            label: <span style={{ fontWeight: 600 }}>{role === 'TEACHER' ? 'Bài giảng và bài tập' : 'Ngân hàng đề thi'}</span>,
             style: { borderRadius: 12, marginBottom: 12, height: 54, display: 'flex', alignItems: 'center', fontSize: 15 },
         });
         // 5. My Classes - Teacher only
@@ -274,8 +279,8 @@ export default function Dashboard() {
             style: { borderRadius: 12, marginBottom: 12, height: 54, display: 'flex', alignItems: 'center', fontSize: 15 },
         });
 
-        // 8. Student Feedback - Teacher and Admin
-        if (role === 'TEACHER' || role === 'ADMIN') {
+        // 8. Student Feedback - Teacher only
+        if (role === 'TEACHER') {
             items.push({
                 key: '8',
                 icon: <MessageOutlined style={{ fontSize: 20 }} />,

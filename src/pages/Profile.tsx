@@ -133,8 +133,8 @@ export default function Profile() {
                         className="profile-card"
                         style={{
                             borderRadius: 24,
-                            boxShadow: '0 10px 25px -5px rgba(30, 64, 175, 0.05)',
-                            border: '1px solid #E2E8F0',
+                            boxShadow: 'var(--card-shadow)',
+                            border: 'none',
                             textAlign: 'center',
                             overflow: 'hidden'
                         }}
@@ -231,8 +231,8 @@ export default function Profile() {
                     <Card
                         style={{
                             borderRadius: 24,
-                            boxShadow: '0 10px 25px -5px rgba(30, 64, 175, 0.05)',
-                            border: '1px solid #E2E8F0',
+                            boxShadow: 'var(--card-shadow)',
+                            border: 'none',
                             padding: '12px'
                         }}
                     >

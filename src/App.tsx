@@ -9,6 +9,7 @@ import ExamBank from './pages/ExamBank';
 import TestDetail from './pages/TestDetail';
 import PartDetail from './pages/PartDetail';
 import TeacherClasses from './pages/TeacherClasses';
+import TeacherMaterials from './pages/TeacherMaterials';
 import ClassManagement from './pages/ClassManagement';
 import Profile from './pages/Profile';
 import ComplaintManagement from './pages/ComplaintManagement';
@@ -85,6 +86,7 @@ const AppContent = ({ loading, isExiting }: { loading: boolean, isExiting: boole
               <Route path="/users" element={<UserManagement />} />
               <Route path="/classes" element={<ClassManagement />} />
               <Route path="/teacher/classes" element={<TeacherClasses />} />
+              <Route path="/teacher/materials" element={<TeacherMaterials />} />
               <Route path="/exam-bank" element={<ExamBank />} />
               <Route path="/exam-bank/:testId" element={<TestDetail />} />
               <Route path="/exam-bank/:testId/parts/:partId" element={<PartDetail />} />

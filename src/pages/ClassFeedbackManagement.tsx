@@ -34,11 +34,6 @@ export default function ClassFeedbackManagement() {
     const [loading, setLoading] = useState(false);
     const { token } = theme.useToken();
 
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const modernShadow = isDark 
-        ? `0 10px 30px -5px rgba(0, 0, 0, 0.5)`
-        : '0 10px 30px -5px rgba(37, 99, 235, 0.08)';
-
     const fetchFeedbacks = async () => {
         setLoading(true);
         try {
@@ -86,9 +81,9 @@ export default function ClassFeedbackManagement() {
             width: 200,
             render: (_, record) => (
                 <Space>
-                    <Avatar 
-                        src={record.user?.avatarUrl} 
-                        icon={<UserOutlined />} 
+                    <Avatar
+                        src={record.user?.avatarUrl}
+                        icon={<UserOutlined />}
                         style={{ backgroundColor: token.colorPrimary }}
                     />
                     <Space direction="vertical" size={0}>
@@ -134,8 +129,8 @@ export default function ClassFeedbackManagement() {
             render: (status: string) => {
                 const isPending = status === 'PENDING';
                 return (
-                    <Tag 
-                        icon={isPending ? <ClockCircleOutlined /> : <CheckCircleOutlined />} 
+                    <Tag
+                        icon={isPending ? <ClockCircleOutlined /> : <CheckCircleOutlined />}
                         color={isPending ? 'gold' : 'success'}
                         style={{ borderRadius: '20px', padding: '2px 12px', fontWeight: 600 }}
                     >
@@ -167,7 +162,7 @@ export default function ClassFeedbackManagement() {
                         onClick={() => handleResolve(record)}
                         style={{ borderRadius: '8px', background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)', border: 'none' }}
                     >
-                        Xử lý xong
+                        Đã xử lý
                     </Button>
                 ) : (
                     <Text type="secondary" style={{ fontSize: '12px' }}>Đã hoàn tất lúc {new Date(record.createdAt).toLocaleDateString('vi-VN')}</Text>
@@ -179,12 +174,17 @@ export default function ClassFeedbackManagement() {
     return (
         <div style={{ padding: '24px', background: token.colorBgLayout, minHeight: '100vh' }}>
             <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                <Button 
-                    icon={<ReloadOutlined />} 
-                    onClick={fetchFeedbacks} 
+                <Button
+                    icon={<ReloadOutlined />}
+                    onClick={fetchFeedbacks}
                     loading={loading}
                     size="large"
-                    style={{ borderRadius: 10, fontWeight: 600 }}
+                    style={{
+                        borderRadius: 10,
+                        fontWeight: 600,
+                        border: '1px solid var(--border-color)',
+                        boxShadow: 'var(--card-shadow)'
+                    }}
                 >
                     Làm mới
                 </Button>
@@ -193,7 +193,7 @@ export default function ClassFeedbackManagement() {
             <Card
                 style={{
                     borderRadius: 24,
-                    boxShadow: modernShadow,
+                    boxShadow: 'var(--card-shadow)',
                     border: 'none',
                     overflow: 'hidden'
                 }}

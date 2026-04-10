@@ -30,12 +30,8 @@ export default function TeacherClasses() {
         fetchMyClasses();
     }, []);
 
-    // Cấu hình bóng đổ hiện đại
     const theme = useTheme();
     const isDark = theme.theme === 'dark';
-    const modernShadow = isDark 
-        ? '0 10px 30px -5px rgba(0, 0, 0, 0.4), 0 4px 10px -6px rgba(0, 0, 0, 0.2)'
-        : '0 10px 30px -5px rgba(37, 99, 235, 0.08), 0 4px 10px -6px rgba(37, 99, 235, 0.04)';
 
     const fetchMyClasses = async () => {
         setLoading(true);
@@ -215,14 +211,26 @@ export default function TeacherClasses() {
                         type="primary"
                         icon={<EyeOutlined />}
                         onClick={() => handleViewStudents(record)}
-                        style={{ borderRadius: 6 }}
+                        style={{ 
+                            borderRadius: 6,
+                            background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
+                            border: 'none',
+                            boxShadow: '0 4px 14px rgba(59, 130, 246, 0.35)',
+                            fontWeight: 600
+                        }}
                     >
                         Xem học viên
                     </Button>
                     <Button
                         icon={<DownloadOutlined />}
                         onClick={() => handleExportExcel(record.id, record.className)}
-                        style={{ borderRadius: 6, borderColor: '#10B981', color: '#10B981' }}
+                        style={{ 
+                            borderRadius: 6, 
+                            borderColor: '#10B981', 
+                            color: '#10B981',
+                            boxShadow: 'var(--card-shadow)',
+                            fontWeight: 600
+                        }}
                     >
                         Tải Excel
                     </Button>
@@ -329,7 +337,7 @@ export default function TeacherClasses() {
                                 borderRadius: 24,
                                 border: 'none',
                                 background: isDark ? '#1E293B' : '#FFFFFF',
-                                boxShadow: modernShadow,
+                                boxShadow: 'var(--card-shadow)',
                                 transition: 'all 0.3s ease'
                             }}
                             bodyStyle={{ padding: '24px' }}
@@ -370,7 +378,7 @@ export default function TeacherClasses() {
                     borderRadius: 20,
                     border: 'none',
                     background: isDark ? '#1E293B' : '#FFFFFF',
-                    boxShadow: modernShadow
+                    boxShadow: 'var(--card-shadow)'
                 }}
                 bodyStyle={{ padding: '20px 24px' }}
             >
@@ -388,7 +396,12 @@ export default function TeacherClasses() {
                         icon={<ReloadOutlined />}
                         onClick={fetchMyClasses}
                         loading={loading}
-                        style={{ borderRadius: '10px', color: '#475569', fontWeight: 600, border: '1px solid #E2E8F0' }}
+                        style={{ 
+                            borderRadius: 10, 
+                            fontWeight: 600, 
+                            border: '1px solid var(--border-color)',
+                            boxShadow: 'var(--card-shadow)' 
+                        }}
                     >
                         Làm mới
                     </Button>
@@ -396,7 +409,7 @@ export default function TeacherClasses() {
             </Card>
 
             {/* Table Card */}
-            <Card style={{ borderRadius: 24, border: 'none', boxShadow: modernShadow, overflow: 'hidden', background: isDark ? '#1E293B' : '#FFFFFF' }} bodyStyle={{ padding: 0 }}>
+            <Card style={{ borderRadius: 24, border: 'none', boxShadow: 'var(--card-shadow)', overflow: 'hidden', background: isDark ? '#1E293B' : '#FFFFFF' }} bodyStyle={{ padding: 0 }}>
                 <Table
                     columns={classColumns}
                     dataSource={filteredClasses}
@@ -416,7 +429,15 @@ export default function TeacherClasses() {
                             type="primary"
                             icon={<DownloadOutlined />}
                             onClick={() => selectedClass && handleExportExcel(selectedClass.id, selectedClass.className)}
-                            style={{ background: '#10B981', borderColor: '#10B981', borderRadius: 8, marginRight: 24, height: 40, fontWeight: 600 }}
+                            style={{ 
+                                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', 
+                                border: 'none', 
+                                borderRadius: 8, 
+                                marginRight: 24, 
+                                height: 40, 
+                                fontWeight: 600,
+                                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                            }}
                         >
                             Xuất báo cáo Excel lớp
                         </Button>
@@ -484,7 +505,12 @@ export default function TeacherClasses() {
                             <Button 
                                 icon={<DownloadOutlined />} 
                                 onClick={() => handleExportStudentExcel(selectedStudent.id, selectedStudent.name)}
-                                style={{ borderRadius: 8, borderColor: '#10B981', color: '#10B981' }}
+                                style={{ 
+                                    borderRadius: 8, 
+                                    borderColor: '#10B981', 
+                                    color: '#10B981',
+                                    boxShadow: 'var(--card-shadow)'
+                                }}
                             >
                                 Xuất Excel
                             </Button>
@@ -493,7 +519,13 @@ export default function TeacherClasses() {
                                 danger 
                                 icon={<DownloadOutlined />} 
                                 onClick={() => handleExportStudentPdf(selectedStudent.id, selectedStudent.name)}
-                                style={{ borderRadius: 8, marginRight: 24 }}
+                                style={{ 
+                                    borderRadius: 8, 
+                                    marginRight: 24,
+                                    background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+                                    border: 'none',
+                                    boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)'
+                                }}
                             >
                                 Xuất PDF
                             </Button>

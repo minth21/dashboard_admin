@@ -10,6 +10,9 @@ import {
     Modal,
     Tooltip,
     theme,
+    Form,
+    Input,
+    Select
 } from 'antd';
 import {
     CheckCircleOutlined,
@@ -17,9 +20,11 @@ import {
     ReloadOutlined,
     FileTextOutlined,
     UserOutlined,
+    PlusOutlined,
+    SendOutlined
 } from '@ant-design/icons';
 import { useOutletContext } from 'react-router-dom';
-import { complaintApi, type Complaint } from '../services/api';
+import { complaintApi, testApi, type Complaint } from '../services/api';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Text } = Typography;
@@ -31,13 +36,12 @@ export default function ComplaintManagement() {
     const canResolve = isAdmin || isSpecialist;
 
     const [complaints, setComplaints] = useState<Complaint[]>([]);
+    const [tests, setTests] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+    const [createModalVisible, setCreateModalVisible] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [form] = Form.useForm();
     const { token } = theme.useToken();
-
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const modernShadow = isDark
-        ? `0 10px 30px -5px rgba(0, 0, 0, 0.5)`
-        : '0 10px 30px -5px rgba(37, 99, 235, 0.08)';
 
     const fetchComplaints = async () => {
         setLoading(true);
@@ -54,9 +58,42 @@ export default function ComplaintManagement() {
         }
     };
 
+    const fetchTests = async () => {
+        if (canResolve) return; // Only teacher needs to load tests for creating complaint
+        try {
+            const data = await testApi.list(1, 100); // Load enough tests for dropdown
+            if (data.success && data.data) {
+                setTests(data.data);
+            }
+        } catch (error) {
+            console.error('Error fetching tests:', error);
+        }
+    };
+
     useEffect(() => {
         fetchComplaints();
+        fetchTests();
     }, []);
+
+    const handleCreateComplaint = async (values: any) => {
+        setSubmitting(true);
+        try {
+            const data = await complaintApi.send(values);
+            if (data.success) {
+                message.success('Gửi góp ý thành công!');
+                setCreateModalVisible(false);
+                form.resetFields();
+                fetchComplaints();
+            } else {
+                message.error(data.message || 'Không thể gửi góp ý');
+            }
+        } catch (error) {
+            console.error('Error creating complaint:', error);
+            message.error('Có lỗi xảy ra');
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     const handleResolve = async (complaint: Complaint) => {
         Modal.confirm({
@@ -178,13 +215,35 @@ export default function ComplaintManagement() {
 
     return (
         <div style={{ padding: '24px', background: token.colorBgLayout, minHeight: '100vh' }}>
-            <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+            <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 16 }}>
+                {!canResolve && (
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => setCreateModalVisible(true)}
+                        size="large"
+                        style={{
+                            borderRadius: 10,
+                            background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                            border: 'none',
+                            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                            fontWeight: 600,
+                        }}
+                    >
+                        Gửi góp ý bài thi
+                    </Button>
+                )}
                 <Button
                     icon={<ReloadOutlined />}
                     onClick={fetchComplaints}
                     loading={loading}
                     size="large"
-                    style={{ borderRadius: 10 }}
+                    style={{ 
+                        borderRadius: 10, 
+                        boxShadow: 'var(--card-shadow)',
+                        border: '1px solid var(--border-color)',
+                        fontWeight: 600
+                    }}
                 >
                     Làm mới
                 </Button>
@@ -193,7 +252,7 @@ export default function ComplaintManagement() {
             <Card
                 style={{
                     borderRadius: 20,
-                    boxShadow: modernShadow,
+                    boxShadow: 'var(--card-shadow)',
                     border: 'none',
                     overflow: 'hidden'
                 }}
@@ -206,11 +265,79 @@ export default function ComplaintManagement() {
                     loading={loading}
                     pagination={{
                         pageSize: 10,
-                        showTotal: (total) => `Tổng cộng ${total} góp ý`,
+                        showTotal: (total) => <span style={{ fontWeight: 600 }}>Tổng cộng {total} góp ý</span>,
                         style: { padding: '16px 24px' }
                     }}
                 />
             </Card>
+
+            <Modal
+                title={
+                    <Space>
+                        <div style={{
+                            width: 36, height: 36, borderRadius: 10,
+                            background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#fff', fontSize: 18, boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
+                        }}>
+                            <SendOutlined />
+                        </div>
+                        <span style={{ fontSize: 18, fontWeight: 700 }}>Gửi Góp Ý Bài Thi</span>
+                    </Space>
+                }
+                open={createModalVisible}
+                onCancel={() => {
+                    setCreateModalVisible(false);
+                    form.resetFields();
+                }}
+                onOk={() => form.submit()}
+                confirmLoading={submitting}
+                okText="Gửi góp ý"
+                cancelText="Hủy"
+                centered
+                okButtonProps={{
+                    style: {
+                        borderRadius: 8,
+                        background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
+                        border: 'none',
+                        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                        fontWeight: 600
+                    }
+                }}
+            >
+                <div style={{ marginTop: 24 }}>
+                    <Form form={form} layout="vertical" onFinish={handleCreateComplaint}>
+                        <Form.Item 
+                            name="testId" 
+                            label={<span style={{ fontWeight: 600 }}>Chọn bài thi cần góp ý</span>} 
+                            rules={[{ required: true, message: 'Vui lòng chọn bài thi!' }]}
+                        >
+                            <Select 
+                                size="large" 
+                                showSearch 
+                                placeholder="Tìm kiếm bài thi..."
+                                optionFilterProp="children"
+                                filterOption={(input, option: any) =>
+                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                options={tests.map(t => ({ value: t.id, label: t.title }))}
+                                style={{ borderRadius: 8 }}
+                            />
+                        </Form.Item>
+                        <Form.Item 
+                            name="content" 
+                            label={<span style={{ fontWeight: 600 }}>Nội dung góp ý / báo lỗi</span>} 
+                            rules={[{ required: true, message: 'Vui lòng nhập nội dung!' }]}
+                        >
+                            <Input.TextArea 
+                                rows={5} 
+                                placeholder="Mô tả chi tiết lỗi (Ví dụ: Câu 5 Part 2 bị sai đáp án...)" 
+                                style={{ borderRadius: 8, padding: '12px' }}
+                            />
+                        </Form.Item>
+                    </Form>
+                </div>
+            </Modal>
         </div>
     );
 }
